@@ -1,0 +1,21 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  name: PluginMembers
+spec:
+  version: 1.0.1
+  requires: ">=2.23.0"
+  author:
+    name: chenhufei
+    website: https://github.com/chenhufei
+  logo: logo.svg
+  homepage: https://github.com/chenhufei/plugin-members
+  repo: https://github.com/chenhufei/plugin-members
+  issues: https://github.com/chenhufei/plugin-members/issues
+  displayName: "成员管理"
+  description: "成员管理模块，支持访客提交成员信息，管理员审核和分组展示。"
+  license:
+    - name: "GPL-3.0"
+  configMapName: plugin-members-configmap
+  settingName: plugin-members-settings
+  enabled: true

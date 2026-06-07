@@ -1,0 +1,190 @@
+apiVersion: v1alpha1
+kind: Setting
+metadata:
+  name: plugin-members-settings
+spec:
+  forms:
+    - group: basic
+      label: 基础设置
+      formSchema:
+        - $formkit: switch
+          name: autoApprove
+          id: autoApprove
+          key: autoApprove
+          label: 开启自动审核
+          help: 新成员申请后自动审核通过，无需管理员手动审核
+          value: false
+        - $formkit: radio
+          name: sendEmail
+          id: sendEmail
+          key: sendEmail
+          label: 是否发送邮件通知
+          value: false
+          options:
+            - value: true
+              label: 开启
+            - value: false
+              label: 关闭
+        - $formkit: text
+          if: $get(sendEmail).value === true
+          id: adminEmail
+          name: adminEmail
+          key: adminEmail
+          value: ""
+          label: 管理员邮箱
+          help: 管理员邮箱，用于接收邮件通知
+          validation: required|email
+        - $formkit: select
+          id: defaultGroupName
+          name: defaultGroupName
+          key: defaultGroupName
+          label: 默认成员分组
+          help: 新成员申请时如果未选择分组，将自动归入此分组
+          clearable: true
+          action: /apis/member.plugin.halo.run/v1alpha1/membergroups
+          requestOption:
+            method: GET
+            pageField: page
+            sizeField: size
+            totalField: total
+            itemsField: items
+            labelField: spec.displayName
+            valueField: metadata.name
+        - $formkit: select
+          id: forbidSelectedGroupName
+          name: forbidSelectedGroupName
+          key: forbidSelectedGroupName
+          label: 禁止申请的分组
+          multiple: true
+          clearable: true
+          action: /apis/member.plugin.halo.run/v1alpha1/membergroups
+          requestOption:
+            method: GET
+            pageField: page
+            sizeField: size
+            totalField: total
+            itemsField: items
+            labelField: spec.displayName
+            valueField: metadata.name
+          help: 成员申请页面中禁止显示的分组，用户无法申请加入这些分组
+        - $formkit: switch
+          id: enableRateLimit
+          name: enableRateLimit
+          key: enableRateLimit
+          label: 启用提交限流
+          help: 开启后会按客户端 IP 限制匿名提交频率，降低刷表和误操作风险
+          value: true
+        - $formkit: number
+          if: $get(enableRateLimit).value === true
+          id: maxRequestsPerMinute
+          name: maxRequestsPerMinute
+          key: maxRequestsPerMinute
+          label: 每分钟最大提交次数
+          help: 单个客户端 IP 每分钟最多允许提交的次数，建议 5-30
+          value: 10
+          validation: required|min:1|max:1000
+        - $formkit: switch
+          id: enableSecurityBlocklist
+          name: enableSecurityBlocklist
+          key: enableSecurityBlocklist
+          label: 启用安全黑名单
+          help: 开启后会按下方 IP 和 User-Agent 关键字拒绝匿名提交请求
+          value: false
+        - $formkit: textarea
+          if: $get(enableSecurityBlocklist).value === true
+          id: blockedIpList
+          name: blockedIpList
+          key: blockedIpList
+          label: IP 黑名单
+          help: 多个 IP 可使用换行或英文逗号分隔；默认不拦截 127.0.0.1
+          value: ""
+        - $formkit: textarea
+          if: $get(enableSecurityBlocklist).value === true
+          id: blockedUserAgentKeywords
+          name: blockedUserAgentKeywords
+          key: blockedUserAgentKeywords
+          label: User-Agent 黑名单关键字
+          help: 多个关键字可使用换行或英文逗号分隔，例如 scraper、python-requests
+          value: ""
+        - $formkit: switch
+          if: $get(enableSecurityBlocklist).value === true
+          id: rejectMissingUserAgent
+          name: rejectMissingUserAgent
+          key: rejectMissingUserAgent
+          label: 拒绝空 User-Agent
+          help: 默认关闭，避免误伤代理或特殊客户端
+          value: false
+    - group: display
+      label: 显示设置
+      formSchema:
+        - $formkit: text
+          id: memberCardBackground
+          name: memberCardBackground
+          key: memberCardBackground
+          label: 成员卡片背景图
+          help: 成员卡片的统一背景图片URL，留空则使用默认QQ主页背景图
+          value: ""
+          placeholder: "https://example.com/background.jpg"
+    - group: emailTemplate
+      label: 邮件模板
+      formSchema:
+        - $formkit: textarea
+          id: adminSubmitSubject
+          name: adminSubmitSubject
+          key: adminSubmitSubject
+          label: 管理员通知 - 邮件标题
+          help: "变量：{displayName} 成员名称, {autoApproved} 是否自动通过"
+          value: ""
+          placeholder: "有新的成员申请，{autoApproved}！"
+          rows: 2
+        - $formkit: textarea
+          id: adminSubmitBody
+          name: adminSubmitBody
+          key: adminSubmitBody
+          label: 管理员通知 - 邮件正文
+          help: "变量：{displayName} 名称, {email} 邮箱, {school} 学校, {qq} QQ号, {groupName} 分组, {reviewUrl} 审核链接。留空使用默认模板"
+          value: ""
+          placeholder: |
+            有新的成员申请，请审核：
+            账号名称：{displayName}
+            邮箱：{email}
+            所属学校：{school}
+            QQ号：{qq}
+            分组：{groupName}
+          rows: 8
+        - $formkit: textarea
+          id: userSubmitSubject
+          name: userSubmitSubject
+          key: userSubmitSubject
+          label: 用户通知 - 提交成功标题
+          value: ""
+          placeholder: "您的成员申请已提交。"
+          rows: 2
+        - $formkit: textarea
+          id: userSubmitBody
+          name: userSubmitBody
+          key: userSubmitBody
+          label: 用户通知 - 提交成功正文
+          value: ""
+          placeholder: "您的成员申请已提交，请等待审核！"
+          rows: 4
+        - $formkit: textarea
+          id: reviewResultSubject
+          name: reviewResultSubject
+          key: reviewResultSubject
+          label: 审核结果 - 邮件标题
+          help: "变量：{approved} 是否通过, {displayName} 名称"
+          value: ""
+          placeholder: "您的成员申请{approved}，请查看！"
+          rows: 2
+        - $formkit: textarea
+          id: reviewResultBody
+          name: reviewResultBody
+          key: reviewResultBody
+          label: 审核结果 - 邮件正文
+          help: "变量：{approved} 是否通过, {displayName} 名称, {reviewDescription} 审核描述"
+          value: ""
+          placeholder: |
+            您的成员申请{approved}。
+            审核描述：{reviewDescription}
+          rows: 6

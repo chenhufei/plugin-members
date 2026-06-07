@@ -1,0 +1,92 @@
+plugins {
+    id "com.github.node-gradle.node" version "7.1.0"
+    id "run.halo.plugin.devtools" version "0.6.2"
+    id "io.freefair.lombok" version "9.1.0"
+    id 'java'
+}
+
+group 'run.halo.members'
+version '1.0.1'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform('run.halo.tools.platform:plugin:2.23.0')
+    compileOnly 'run.halo.app:api'
+
+    testImplementation 'run.halo.app:api'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = 21
+}
+
+node {
+    download = true
+    version = '24.14.0'
+    pnpmVersion = '10.22.0'
+    nodeProjectDir = file("${project.projectDir}/ui")
+}
+
+tasks.register('buildFrontend', PnpmTask) {
+    args = ['build']
+    dependsOn('installDepsForUI')
+}
+
+tasks.register('typecheckFrontend', PnpmTask) {
+    args = ['typecheck']
+    dependsOn('installDepsForUI')
+}
+
+tasks.register('installDepsForUI', PnpmTask) {
+    args = ['install', '--frozen-lockfile']
+}
+
+tasks.named('compileJava') {
+    dependsOn('buildFrontend')
+}
+
+tasks.named('check') {
+    dependsOn('typecheckFrontend')
+}
+
+halo {
+    version = '2.23.0'
+}
+
+haloPlugin {
+    openApi {
+        outputDir = file("$rootDir/api-docs/openapi/v3_0")
+        groupingRules {
+            membersV1alpha1Api {
+                displayName = 'Extension API for Members'
+                pathsToMatch = [
+                    '/apis/member.plugin.halo.run/v1alpha1/members/**',
+                    '/apis/member.plugin.halo.run/v1alpha1/membergroups/**',
+                    '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/**'
+                ]
+            }
+        }
+        groupedApiMappings = [
+                '/v3/api-docs/membersV1alpha1Api': 'membersV1alpha1Api.json'
+        ]
+        generator {
+            outputDir = file("${projectDir}/ui/src/api/generated")
+        }
+    }
+}

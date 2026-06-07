@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+ui/node_modules/
+
+# Build outputs
+bin/
+build/
+target/
+*.jar
+!gradle-wrapper.jar
+*.tsbuildinfo
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+.gradle/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+.npm/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# Kiro
+.kiro/
+.agent/
+.cursor/
+.windsurf/
