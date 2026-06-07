@@ -1,0 +1,37 @@
+apiVersion: v1alpha1
+kind: Role
+metadata:
+  name: role-template-member-view
+  labels:
+    halo.run/role-template: "true"
+  annotations:
+    rbac.authorization.halo.run/module: "成员"
+    rbac.authorization.halo.run/display-name: "成员查看"
+    rbac.authorization.halo.run/ui-permissions: |
+      ["plugin:members:view"]
+rules:
+  - apiGroups: [ "member.plugin.halo.run" ]
+    resources: [ "members", "membergroups" ]
+    verbs: [ "get", "list" ]
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/members" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "get", "list" ]
+---
+apiVersion: v1alpha1
+kind: Role
+metadata:
+  name: role-template-member-manage
+  labels:
+    halo.run/role-template: "true"
+  annotations:
+    rbac.authorization.halo.run/module: "成员"
+    rbac.authorization.halo.run/display-name: "成员管理"
+    rbac.authorization.halo.run/ui-permissions: |
+      ["plugin:members:manage"]
+    rbac.authorization.halo.run/dependencies: |
+      ["role-template-member-view"]
+rules:
+  - apiGroups: [ "member.plugin.halo.run" ]
+    resources: [ "members", "membergroups" ]
+    verbs: [ "create", "patch", "update", "delete", "deletecollection" ]

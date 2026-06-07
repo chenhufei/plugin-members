@@ -1,0 +1,30 @@
+{
+  "name": "@halo-dev/plugin-members-console",
+  "version": "1.0.5",
+  "type": "module",
+  "scripts": {
+    "dev": "node ./scripts/run-pnpm-package-bin.mjs @rsbuild/core bin/rsbuild.js build --env-mode development --watch",
+    "build": "node ./scripts/run-pnpm-package-bin.mjs @rsbuild/core bin/rsbuild.js build",
+    "typecheck": "node ./scripts/run-pnpm-package-bin.mjs vue-tsc bin/vue-tsc.js --noEmit"
+  },
+  "dependencies": {
+    "@halo-dev/api-client": "^2.23.0",
+    "@halo-dev/components": "^2.23.0",
+    "@halo-dev/ui-shared": "^2.23.0",
+    "@tanstack/vue-query": "^4.41.0",
+    "@vueuse/router": "^10.11.1",
+    "es-toolkit": "^1.45.1",
+    "jsqr": "^1.4.0",
+    "vue": "^3.5.24",
+    "vue-draggable-plus": "^0.6.0",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@halo-dev/ui-plugin-bundler-kit": "^2.23.0",
+    "@rsbuild/core": "^1.6.6",
+    "@types/node": "^16.18.126",
+    "typescript": "~5.9.3",
+    "vue-tsc": "^2.2.12"
+  },
+  "packageManager": "pnpm@10.22.0"
+}

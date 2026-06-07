@@ -1,0 +1,84 @@
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: admin-member-submit
+  annotations:
+    rbac.authorization.halo.run/ui-permissions: |
+      [ "plugin:members:manage" ]
+spec:
+  displayName: "成员申请通知管理员"
+  description: "有新的成员申请时通知管理员"
+  properties:
+    - name: adminEmail
+      type: string
+      description: "管理员邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: website
+      type: string
+      optional: true
+      description: "网站"
+    - name: description
+      type: string
+      optional: true
+      description: "简介"
+    - name: groupName
+      type: string
+      description: "分组"
+    - name: autoApproved
+      type: boolean
+      description: "是否自动审核"
+    - name: reviewUrl
+      type: string
+      description: "审核链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-submit
+spec:
+  displayName: "成员申请提交成功通知"
+  description: "提交成员申请后通知用户"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: review-member-submit
+spec:
+  displayName: "成员申请审核通知"
+  description: "管理员审核完成后通知用户"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: reviewDescription
+      type: string
+      optional: true
+      description: "审核描述"
+    - name: approved
+      type: boolean
+      description: "是否通过"
