@@ -22,7 +22,6 @@ import run.halo.app.infra.ExternalLinkProcessor;
 import run.halo.app.notification.NotificationReasonEmitter;
 import run.halo.app.notification.UserIdentity;
 import run.halo.members.service.SettingConfigMember;
-import run.halo.members.service.SettingConfigMember.EmailTemplateConfig;
 import static run.halo.members.MemberConstant.ADMIN_MEMBER_SUBMIT;
 import static run.halo.members.MemberConstant.MARK_AS_NOTIFIED;
 import static run.halo.members.MemberConstant.REVIEW_DESCRIPTION;
@@ -159,7 +158,6 @@ public class NotificationReasonPublisher {
                 
             notificationReasonEmitter.emit(ADMIN_MEMBER_SUBMIT,
                 builder -> {
-                    var emailTemplates = settingConfigMember.getEmailTemplateConfig().block();
                     var attributes = ReasonData.builder()
                         .adminEmail(adminEmail)
                         .email(spec.getEmail())
@@ -171,8 +169,6 @@ public class NotificationReasonPublisher {
                         .reviewUrl(url)
                         .website(spec.getWebsite() != null ? spec.getWebsite() : "")
                         .description(spec.getDescription() != null ? spec.getDescription() : "")
-                        .customAdminSubmitSubject(emailTemplates != null && StringUtils.isNotBlank(emailTemplates.getAdminSubmitSubject()) ? emailTemplates.getAdminSubmitSubject() : "")
-                        .customAdminSubmitBody(emailTemplates != null && StringUtils.isNotBlank(emailTemplates.getAdminSubmitBody()) ? emailTemplates.getAdminSubmitBody() : "")
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
                         .author(UserIdentity.anonymousWithEmail(adminEmail))
@@ -184,8 +180,7 @@ public class NotificationReasonPublisher {
         @Builder
         record ReasonData(String adminEmail, String email, String displayName, String school,
                           String qq, String groupName, Boolean autoApproved,
-                          String reviewUrl, String website, String description,
-                          String customAdminSubmitSubject, String customAdminSubmitBody) {
+                          String reviewUrl, String website, String description) {
         }
     }
 
@@ -212,12 +207,9 @@ public class NotificationReasonPublisher {
                 
             notificationReasonEmitter.emit(USER_MEMBER_SUBMIT,
                 builder -> {
-                    var emailTemplates = settingConfigMember.getEmailTemplateConfig().block();
                     var attributes = ReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
-                        .customUserSubmitSubject(emailTemplates != null && StringUtils.isNotBlank(emailTemplates.getUserSubmitSubject()) ? emailTemplates.getUserSubmitSubject() : "")
-                        .customUserSubmitBody(emailTemplates != null && StringUtils.isNotBlank(emailTemplates.getUserSubmitBody()) ? emailTemplates.getUserSubmitBody() : "")
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
                         .author(UserIdentity.anonymousWithEmail(email))
@@ -227,8 +219,7 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName,
-                          String customUserSubmitSubject, String customUserSubmitBody) {
+        record ReasonData(String email, String displayName) {
         }
     }
 
@@ -258,14 +249,11 @@ public class NotificationReasonPublisher {
                 
             notificationReasonEmitter.emit(REVIEW_MEMBER_SUBMIT,
                 builder -> {
-                    var emailTemplates = settingConfigMember.getEmailTemplateConfig().block();
                     var attributes = ReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
                         .reviewDescription(reviewDescription)
                         .approved("APPROVED".equals(spec.getStatus()))
-                        .customReviewResultSubject(emailTemplates != null && StringUtils.isNotBlank(emailTemplates.getReviewResultSubject()) ? emailTemplates.getReviewResultSubject() : "")
-                        .customReviewResultBody(emailTemplates != null && StringUtils.isNotBlank(emailTemplates.getReviewResultBody()) ? emailTemplates.getReviewResultBody() : "")
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
                         .author(UserIdentity.anonymousWithEmail(email))
@@ -275,8 +263,7 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String reviewDescription, Boolean approved,
-                          String customReviewResultSubject, String customReviewResultBody) {
+        record ReasonData(String email, String displayName, String reviewDescription, Boolean approved) {
         }
     }
 
@@ -290,37 +277,6 @@ public class NotificationReasonPublisher {
             Assert.notNull(data, "Reason attributes must not be null");
             return MAPPER.convertValue(data, new TypeReference<>() {
             });
-        }
-    }
-
-    /**
-     * 简单的模板替换工具
-     * 使用 {variableName} 作为占位符
-     * 注意：当前模板渲染通过 Halo 的 Thymeleaf 机制处理，此工具类保留备用
-     */
-    static class TemplateUtils {
-        private TemplateUtils() {}
-
-        /**
-         * 替换模板中的变量
-         * @param template 模板字符串，如 "你好 {name}"
-         * @param vars 变量Map
-         * @return 替换后的字符串
-         */
-        static String render(String template, Map<String, Object> vars) {
-            if (StringUtils.isBlank(template)) {
-                return template;
-            }
-            if (vars == null || vars.isEmpty()) {
-                return template;
-            }
-            String result = template;
-            for (Map.Entry<String, Object> entry : vars.entrySet()) {
-                String key = "{" + entry.getKey() + "}";
-                String value = entry.getValue() != null ? entry.getValue().toString() : "";
-                result = result.replace(key, value);
-            }
-            return result;
         }
     }
 }
