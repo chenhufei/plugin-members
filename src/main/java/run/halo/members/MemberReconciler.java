@@ -21,6 +21,7 @@ import run.halo.app.notification.UserIdentity;
 import static run.halo.members.MemberConstant.ADMIN_MEMBER_SUBMIT;
 import static run.halo.members.MemberConstant.FINALIZER_NAME;
 import static run.halo.members.MemberConstant.REVIEW_MEMBER_SUBMIT;
+import static run.halo.members.MemberConstant.REVIEW_MEMBER_REJECT;
 import static run.halo.members.MemberConstant.USER_MEMBER_SUBMIT;
 import run.halo.members.finders.impl.MemberFinderImpl;
 import run.halo.members.service.SettingConfigMember;
@@ -87,7 +88,7 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
                 if ("REJECTED".equals(status) || "APPROVED".equals(status)) {
                     log.info("Member {} status changed to: {}, publishing ReviewMemberEvent", request.name(), status);
                     if (StringUtils.isNotEmpty(email)) {
-                        reviewNoticeSubscription(email);
+                        reviewNoticeSubscription(email, status);
                     }
                     eventPublisher.publishEvent(new ReviewMemberEvent(this, member));
                 } else {
@@ -115,9 +116,10 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
         notificationCenter.subscribe(subscriber, interestReason).block();
     }
 
-    void reviewNoticeSubscription(String email) {
+    void reviewNoticeSubscription(String email, String status) {
         var interestReason = new Subscription.InterestReason();
-        interestReason.setReasonType(REVIEW_MEMBER_SUBMIT);
+        String reasonType = "APPROVED".equals(status) ? REVIEW_MEMBER_SUBMIT : REVIEW_MEMBER_REJECT;
+        interestReason.setReasonType(reasonType);
         interestReason.setExpression("props.email == '%s'".formatted(email));
         var subscriber = new Subscription.Subscriber();
         subscriber.setName(UserIdentity.anonymousWithEmail(email).name());
