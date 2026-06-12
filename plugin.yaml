@@ -4,7 +4,7 @@ kind: "Plugin"
 metadata:
   name: "PluginMembers"
 spec:
-  version: "2.0.0"
+  version: "1.0.2"
   requires: ">=2.23.0"
   author:
     name: "chenhufei"
