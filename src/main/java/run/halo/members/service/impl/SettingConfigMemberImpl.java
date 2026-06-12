@@ -22,10 +22,4 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
         return settingFetcher.fetch(BasicConfig.GROUP, BasicConfig.class)
             .defaultIfEmpty(new BasicConfig());
     }
-
-    @Override
-    public Mono<EmailTemplateConfig> getEmailTemplateConfig() {
-        return settingFetcher.fetch(EmailTemplateConfig.GROUP, EmailTemplateConfig.class)
-            .defaultIfEmpty(new EmailTemplateConfig());
-    }
 }

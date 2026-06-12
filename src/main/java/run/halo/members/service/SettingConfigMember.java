@@ -11,8 +11,6 @@ public interface SettingConfigMember {
 
     Mono<BasicConfig> getBasicConfig();
 
-    Mono<EmailTemplateConfig> getEmailTemplateConfig();
-
     @Data
     class BasicConfig {
         public static final String GROUP = "basic";
@@ -35,17 +33,5 @@ public interface SettingConfigMember {
             }
             return Math.min(maxRequestsPerMinute, 1000);
         }
-    }
-
-    @Data
-    class EmailTemplateConfig {
-        public static final String GROUP = "emailTemplate";
-
-        private String adminSubmitSubject;
-        private String adminSubmitBody;
-        private String userSubmitSubject;
-        private String userSubmitBody;
-        private String reviewResultSubject;
-        private String reviewResultBody;
     }
 }

@@ -114,8 +114,8 @@ spec:
           label: 拒绝空 User-Agent
           help: 默认关闭，避免误伤代理或特殊客户端
           value: false
-    - group: display
-      label: 显示设置
+    - group: memberCardBackground
+      label: 卡片背景
       formSchema:
         - $formkit: text
           id: memberCardBackground
@@ -125,66 +125,3 @@ spec:
           help: 成员卡片的统一背景图片URL，留空则使用默认QQ主页背景图
           value: ""
           placeholder: "https://example.com/background.jpg"
-    - group: emailTemplate
-      label: 邮件模板
-      formSchema:
-        - $formkit: textarea
-          id: adminSubmitSubject
-          name: adminSubmitSubject
-          key: adminSubmitSubject
-          label: 管理员通知 - 邮件标题
-          help: "变量：{displayName} 成员名称, {autoApproved} 是否自动通过"
-          value: ""
-          placeholder: "有新的成员申请，{autoApproved}！"
-          rows: 2
-        - $formkit: textarea
-          id: adminSubmitBody
-          name: adminSubmitBody
-          key: adminSubmitBody
-          label: 管理员通知 - 邮件正文
-          help: "变量：{displayName} 名称, {email} 邮箱, {school} 学校, {qq} QQ号, {groupName} 分组, {reviewUrl} 审核链接。留空使用默认模板"
-          value: ""
-          placeholder: |
-            有新的成员申请，请审核：
-            账号名称：{displayName}
-            邮箱：{email}
-            所属学校：{school}
-            QQ号：{qq}
-            分组：{groupName}
-          rows: 8
-        - $formkit: textarea
-          id: userSubmitSubject
-          name: userSubmitSubject
-          key: userSubmitSubject
-          label: 用户通知 - 提交成功标题
-          value: ""
-          placeholder: "您的成员申请已提交。"
-          rows: 2
-        - $formkit: textarea
-          id: userSubmitBody
-          name: userSubmitBody
-          key: userSubmitBody
-          label: 用户通知 - 提交成功正文
-          value: ""
-          placeholder: "您的成员申请已提交，请等待审核！"
-          rows: 4
-        - $formkit: textarea
-          id: reviewResultSubject
-          name: reviewResultSubject
-          key: reviewResultSubject
-          label: 审核结果 - 邮件标题
-          help: "变量：{approved} 是否通过, {displayName} 名称"
-          value: ""
-          placeholder: "您的成员申请{approved}，请查看！"
-          rows: 2
-        - $formkit: textarea
-          id: reviewResultBody
-          name: reviewResultBody
-          key: reviewResultBody
-          label: 审核结果 - 邮件正文
-          help: "变量：{approved} 是否通过, {displayName} 名称, {reviewDescription} 审核描述"
-          value: ""
-          placeholder: |
-            您的成员申请{approved}。
-            审核描述：{reviewDescription}
-          rows: 6

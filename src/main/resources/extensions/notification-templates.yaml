@@ -7,48 +7,35 @@ spec:
     reasonType: admin-member-submit
     language: default
   template:
-    title: "${customAdminSubmitSubject:有新的成员申请，[(${autoApproved ? '已自动审核通过' : '请审核'})]！}"
+    title: "有新的成员申请，请审核！"
     rawBody: |
-      [(${subscriber.displayName})] 你好：
+      有新的成员申请，请审核：
 
-        成员信息
-
-        账号名称： [(${displayName})]
-
-        邮箱： [(${email})]
-      
-        所属学校： [(${school})]
-
-        QQ号： [(${qq})]
-      
-        分组： [(${groupName})]
+      账号名称：${displayName}
+      邮箱：${email}
+      所属学校：${school}
+      QQ号：${qq}
+      分组：${groupName}
 
     htmlBody: |
       <div class="content">
         <div class="head">
-          <p class="honorific" th:text="|${subscriber.displayName} 你好：|"></p>
+          <p class="honorific">${subscriber.displayName} 你好：</p>
         </div>
         <div class="body">
-          <div th:if="${customAdminSubmitBody != null and !#strings.isEmpty(customAdminSubmitBody)}">
-            <div th:utext="${customAdminSubmitBody}"></div>
+          <p>有新的成员申请，请审核：</p>
+          <div class="summary">
+            <p>账号名称：${displayName}</p>
+            <p>邮箱：${email}</p>
+            <p>所属学校：${school}</p>
+            <p>QQ号：${qq}</p>
+            <p>分组：${groupName}</p>
           </div>
-          <div th:if="${customAdminSubmitBody == null or #strings.isEmpty(customAdminSubmitBody)}">
-            <p>成员信息</p>
-            <div class="summary">
-              <p>账号名称：<span th:text="${displayName}"></span></p>
-              <p>邮箱：<span th:text="${email}"></span></p>
-              <p>所属学校：<span th:text="${school}"></span></p>
-              <p>QQ号：<span th:text="${qq}"></span></p>
-              <p>分组：<span th:text="${groupName}"></span></p>
-            </div>
-            <p><a th:href="${reviewUrl}" target="_blank" rel="noopener noreferrer">前往查看</a></p>
-          </div>
+          <p><a href="${reviewUrl}" target="_blank" rel="noopener noreferrer">前往查看</a></p>
         </div>
         <div></div>
       </div>
-
 ---
-
 apiVersion: notification.halo.run/v1alpha1
 kind: NotificationTemplate
 metadata:
@@ -58,32 +45,23 @@ spec:
     reasonType: user-member-submit
     language: default
   template:
-    title: "${customUserSubmitSubject:您的成员申请已提交。}"
+    title: "您的成员申请已提交。"
     rawBody: |
-      [(${subscriber.displayName})] 你好：
-
-        [(${customUserSubmitBody != null and !#strings.isEmpty(customUserSubmitBody) ? customUserSubmitBody : '您的成员申请已提交，请等待审核！'})]
+      您的成员申请已提交，请等待审核！
 
     htmlBody: |
       <div class="content">
         <div class="head">
-          <p class="honorific" th:text="|${subscriber.displayName} 你好：|"></p>
+          <p class="honorific">${subscriber.displayName} 你好：</p>
         </div>
         <div class="body">
-          <div th:if="${customUserSubmitBody != null and !#strings.isEmpty(customUserSubmitBody)}">
-            <div th:utext="${customUserSubmitBody}"></div>
-          </div>
-          <div th:if="${customUserSubmitBody == null or #strings.isEmpty(customUserSubmitBody)}">
-            <div class="summary">
-              <p><span>您的成员申请已提交，请等待审核！</span></p>
-            </div>
+          <div class="summary">
+            <p>您的成员申请已提交，请等待审核！</p>
           </div>
         </div>
         <div></div>
       </div>
-
 ---
-
 apiVersion: notification.halo.run/v1alpha1
 kind: NotificationTemplate
 metadata:
@@ -93,28 +71,21 @@ spec:
     reasonType: review-member-submit
     language: default
   template:
-    title: "${customReviewResultSubject:您的成员申请[(${approved ? '已通过' : '已拒绝'})]，请查看！}"
+    title: "您的成员申请已审核完成。"
     rawBody: |
-      [(${subscriber.displayName})] 你好：
+      您的成员申请已审核完成。
 
-        [(${customReviewResultBody != null and !#strings.isEmpty(customReviewResultBody) ? customReviewResultBody : ('您的成员申请[(' + (approved ? '已通过审核' : '已被拒绝') + '])。')})]
-
-        审核描述： [(${reviewDescription})]
+      审核描述：${reviewDescription}
 
     htmlBody: |
       <div class="content">
         <div class="head">
-          <p class="honorific" th:text="|${subscriber.displayName} 你好：|"></p>
+          <p class="honorific">${subscriber.displayName} 你好：</p>
         </div>
         <div class="body">
-          <div th:if="${customReviewResultBody != null and !#strings.isEmpty(customReviewResultBody)}">
-            <div th:utext="${customReviewResultBody}"></div>
-          </div>
-          <div th:if="${customReviewResultBody == null or #strings.isEmpty(customReviewResultBody)}">
-            <div class="summary">
-              <p><span th:text="|您的成员申请${approved ? '已通过审核' : '已被拒绝'}。|"></span></p>
-              <p th:if="${reviewDescription != null and reviewDescription != ''}">审核描述：<span th:text="${reviewDescription}"></span></p>
-            </div>
+          <div class="summary">
+            <p>您的成员申请已审核完成。</p>
+            <p th:if="${reviewDescription != null and reviewDescription != ''}">审核描述：${reviewDescription}</p>
           </div>
         </div>
         <div></div>
