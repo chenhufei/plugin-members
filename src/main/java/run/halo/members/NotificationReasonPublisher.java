@@ -26,6 +26,7 @@ import static run.halo.members.MemberConstant.ADMIN_MEMBER_SUBMIT;
 import static run.halo.members.MemberConstant.MARK_AS_NOTIFIED;
 import static run.halo.members.MemberConstant.REVIEW_DESCRIPTION;
 import static run.halo.members.MemberConstant.REVIEW_MEMBER_SUBMIT;
+import static run.halo.members.MemberConstant.REVIEW_MEMBER_REJECT;
 import static run.halo.members.MemberConstant.USER_MEMBER_SUBMIT;
 
 /**
@@ -42,6 +43,7 @@ public class NotificationReasonPublisher {
     private final AdminMemberSubmitNoticeReasonPublisher adminMemberSubmitNoticeReasonPublisher;
     private final UserMemberSubmitNoticeReasonPublisher userMemberSubmitNoticeReasonPublisher;
     private final ReviewMemberSubmitNoticeReasonPublisher reviewMemberSubmitNoticeReasonPublisher;
+    private final ReviewMemberRejectNoticeReasonPublisher reviewMemberRejectNoticeReasonPublisher;
 
     @Async
     @EventListener(MemberEvent.class)
@@ -101,8 +103,13 @@ public class NotificationReasonPublisher {
             return;
         }
 
-        log.info("发送审核结果通知邮件到: {}", email);
-        reviewMemberSubmitNoticeReasonPublisher.publishReasonBy(markedMember.get(), email);
+        log.info("发送审核结果通知邮件到: {} (状态: {})", email, member.getSpec().getStatus());
+        String status = member.getSpec().getStatus();
+        if ("REJECTED".equals(status)) {
+            reviewMemberRejectNoticeReasonPublisher.publishReasonBy(markedMember.get(), email);
+        } else {
+            reviewMemberSubmitNoticeReasonPublisher.publishReasonBy(markedMember.get(), email);
+        }
     }
 
     private Optional<Member> tryMarkReviewAsNotified(String name) {
@@ -264,6 +271,48 @@ public class NotificationReasonPublisher {
 
         @Builder
         record ReasonData(String email, String displayName, String reviewDescription, Boolean approved) {
+        }
+    }
+
+    @Component
+    @RequiredArgsConstructor
+    @SuppressWarnings("deprecation")
+    static class ReviewMemberRejectNoticeReasonPublisher {
+        private final NotificationReasonEmitter notificationReasonEmitter;
+        private final ExternalLinkProcessor externalLinkProcessor;
+
+        public void publishReasonBy(Member member, String email) {
+            log.info("发布审核拒绝通知: 成员={}, 用户邮箱={}", 
+                member.getMetadata().getName(), email);
+            var annotations = MetadataUtil.nullSafeAnnotations(member);
+            String reviewDescription = annotations.get(REVIEW_DESCRIPTION);
+            String url = externalLinkProcessor.processLink("/console/plugins/PluginMembers");
+            var spec = member.getSpec();
+            
+            var reasonSubject = Reason.Subject.builder()
+                .apiVersion(member.getApiVersion())
+                .kind(member.getKind())
+                .name(member.getMetadata().getName())
+                .title(spec.getDisplayName())
+                .url(url)
+                .build();
+                
+            notificationReasonEmitter.emit(REVIEW_MEMBER_REJECT,
+                builder -> {
+                    var attributes = ReasonData.builder()
+                        .email(email)
+                        .displayName(spec.getDisplayName())
+                        .reviewDescription(reviewDescription != null ? reviewDescription : "无")
+                        .build();
+                    builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
+                        .author(UserIdentity.anonymousWithEmail(email))
+                        .subject(reasonSubject);
+                }).block();
+            log.info("审核拒绝通知发布完成");
+        }
+
+        @Builder
+        record ReasonData(String email, String displayName, String reviewDescription) {
         }
     }
 

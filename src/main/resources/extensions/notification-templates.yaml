@@ -90,3 +90,31 @@ spec:
         </div>
         <div></div>
       </div>
+
+---
+apiVersion: notification.halo.run/v1alpha1
+kind: NotificationTemplate
+metadata:
+  name: template-review-member-reject
+spec:
+  reasonSelector:
+    reasonType: review-member-reject
+    language: default
+  template:
+    title: "您的成员申请未通过审核。"
+    rawBody: |
+      您的成员申请未通过审核。
+      拒绝理由：${reviewDescription}
+    htmlBody: |
+      <div class="content">
+        <div class="head">
+          <p class="honorific">${subscriber.displayName} 你好：</p>
+        </div>
+        <div class="body">
+          <div class="summary">
+            <p>很抱歉地通知您，您的成员申请未通过审核。</p>
+            <p th:if="${reviewDescription != null and reviewDescription != ''}">拒绝理由：${reviewDescription}</p>
+          </div>
+        </div>
+        <div></div>
+      </div>

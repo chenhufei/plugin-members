@@ -15,6 +15,8 @@ public enum MemberConstant {
     
     public static final String REVIEW_MEMBER_SUBMIT = "review-member-submit";
     
+    public static final String REVIEW_MEMBER_REJECT = "review-member-reject";
+    
     public static final String FINALIZER_NAME = "member.plugin.halo.run/finalizer";
     
     public static final String REVIEW_DESCRIPTION = "member.plugin.halo.run/review-description";

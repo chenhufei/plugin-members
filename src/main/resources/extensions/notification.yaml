@@ -66,8 +66,8 @@ kind: ReasonType
 metadata:
   name: review-member-submit
 spec:
-  displayName: "成员申请审核通知"
-  description: "管理员审核完成后通知用户"
+  displayName: "成员申请审核通过通知"
+  description: "管理员审核通过后通知用户"
   properties:
     - name: email
       type: string
@@ -82,3 +82,24 @@ spec:
     - name: approved
       type: boolean
       description: "是否通过"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: review-member-reject
+spec:
+  displayName: "成员申请拒绝通知"
+  description: "管理员拒绝成员申请后通知用户"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: reviewDescription
+      type: string
+      optional: true
+      description: "拒绝理由"
