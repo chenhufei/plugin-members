@@ -24,4 +24,7 @@ export default definePlugin({
       },
     },
   ],
+  // 控制台导航入口
+  extensionPoints: {},
+  i18n: {},
 });

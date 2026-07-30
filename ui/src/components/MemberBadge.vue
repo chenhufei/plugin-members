@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { Member } from "@/types";
 import { computed } from "vue";
+import { IconMore, VDropdown, VDropdownItem } from "@halo-dev/components";
 
 const props = defineProps<{
   selectMode?: boolean;
@@ -72,13 +73,20 @@ const isReviewed = computed(() => status.value === "APPROVED" || status.value ==
         {{ school }}
       </span>
       <div v-if="!selectMode" class=":uno: member-badge__actions">
-        <template v-if="isPending">
-          <button class=":uno: member-badge__action-btn member-badge__action-btn--approve" @click.stop="emit('approve')">同意</button>
-          <button class=":uno: member-badge__action-btn member-badge__action-btn--reject" @click.stop="emit('reject')">拒绝</button>
-        </template>
-        <template v-else-if="isReviewed">
-          <button class=":uno: member-badge__action-btn member-badge__action-btn--revert" @click.stop="emit('revert')">撤回审核</button>
-        </template>
+      <template v-if="isPending">
+        <button class=":uno: member-badge__action-btn member-badge__action-btn--approve" @click.stop="emit('approve')">同意</button>
+        <button class=":uno: member-badge__action-btn member-badge__action-btn--reject" @click.stop="emit('reject')">拒绝</button>
+      </template>
+      <template v-else-if="isReviewed">
+        <VDropdown>
+          <button class=":uno: member-badge__action-btn member-badge__action-btn--more" type="button" @click.stop>
+            <IconMore class=":uno: h-3.5 w-3.5" />
+          </button>
+          <template #popper>
+            <VDropdownItem @click="emit('revert')">撤回审核</VDropdownItem>
+          </template>
+        </VDropdown>
+      </template>
       </div>
     </div>
 
@@ -105,9 +113,9 @@ const isReviewed = computed(() => status.value === "APPROVED" || status.value ==
   overflow: hidden;
   border: 1px solid rgb(229 231 235);
   border-radius: 0.5rem;
-  background: rgb(249 250 251);
   padding: 0.5625rem;
   transition: background-color 0.18s ease, border-color 0.18s ease;
+  /* 默认不设置背景色，跟随全局液态玻璃效果 */
 }
 .member-badge:hover,
 .member-badge:focus-within {
@@ -205,10 +213,6 @@ const isReviewed = computed(() => status.value === "APPROVED" || status.value ==
 }
 .member-badge__action-btn--reject {
   background: rgb(220 38 38);
-  color: #fff;
-}
-.member-badge__action-btn--revert {
-  background: rgb(107 114 128);
   color: #fff;
 }
 

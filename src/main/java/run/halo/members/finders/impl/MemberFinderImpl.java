@@ -71,8 +71,9 @@ public class MemberFinderImpl implements MemberFinder {
             
             // 按分组聚合成员
             Map<String, List<MemberVo>> membersByGroup = allMembers.stream()
+                .filter(member -> member.getSpec() != null)
                 .collect(Collectors.groupingBy(
-                    member -> member.getSpec().getGroupName() != null ? 
+                    member -> member.getSpec().getGroupName() != null ?
                         member.getSpec().getGroupName() : "default"
                 ));
             
@@ -94,6 +95,7 @@ public class MemberFinderImpl implements MemberFinder {
             });
 
             List<MemberVo> ungroupedMembers = allMembers.stream()
+                .filter(member -> member.getSpec() != null)
                 .filter(member -> {
                     String groupName = member.getSpec().getGroupName();
                     return groupName == null || !knownGroupNames.contains(groupName);
@@ -110,7 +112,7 @@ public class MemberFinderImpl implements MemberFinder {
                 .collect(Collectors.toCollection(ArrayList::new));
 
             visibleGroups.sort(Comparator.comparing(
-                g -> g.getSpec().getPriority(), 
+                g -> g.getSpec() != null ? g.getSpec().getPriority() : null,
                 Comparator.nullsLast(Comparator.reverseOrder())
             ));
             
@@ -198,6 +200,7 @@ public class MemberFinderImpl implements MemberFinder {
         }
         
         return client.listAll(MemberGroup.class, null, null)
+            .filter(group -> group.getSpec() != null)
             .sort((g1, g2) -> {
                 Integer p1 = g1.getSpec().getPriority();
                 Integer p2 = g2.getSpec().getPriority();
@@ -221,7 +224,8 @@ public class MemberFinderImpl implements MemberFinder {
      */
     private Mono<List<MemberVo>> getAllApprovedMembers() {
         return client.listAll(Member.class, null, null)
-            .filter(member -> "APPROVED".equals(member.getSpec().getStatus()))
+            .filter(member -> member.getSpec() != null
+                && "APPROVED".equals(member.getSpec().getStatus()))
             .map(MemberVo::from)
             .collectList();
     }

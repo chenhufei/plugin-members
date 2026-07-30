@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.0.2'
+version '1.1.4'
 
 repositories {
     mavenCentral()
@@ -34,6 +34,7 @@ test {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
     options.release = 21
+    options.compilerArgs << '-parameters'
 }
 
 node {

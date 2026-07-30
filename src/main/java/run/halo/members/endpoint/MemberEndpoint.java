@@ -1,5 +1,12 @@
 package run.halo.members.endpoint;
 
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -10,6 +17,8 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -17,6 +26,7 @@ import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.members.exception.RateLimitExceededException;
@@ -41,6 +51,13 @@ import run.halo.members.validation.ValidSchool;
 @RequiredArgsConstructor
 public class MemberEndpoint implements CustomEndpoint {
 
+    private static final HttpClient QQ_HTTP_CLIENT = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5))
+        .followRedirects(HttpClient.Redirect.NORMAL)
+        .build();
+
+    private static final ObjectMapper QQ_OBJECT_MAPPER = new ObjectMapper();
+
     private final MemberFinder memberFinder;
     private final MemberService memberService;
     private final SettingConfigMember settingConfigMember;
@@ -54,6 +71,10 @@ public class MemberEndpoint implements CustomEndpoint {
             .GET("membergroups", this::listGroups,
                 builder -> builder.operationId("ListMemberGroups")
                     .description("List all member groups")
+                    .tag(tag))
+            .GET("qq-info", this::fetchQqInfo,
+                builder -> builder.operationId("FetchQqInfo")
+                    .description("服务端代理获取 QQ 昵称信息，规避前端跨域与网络限制")
                     .tag(tag))
             .POST("membersubmits/-/submit", this::submitMember,
                 builder -> builder.operationId("SubmitMember")
@@ -84,6 +105,145 @@ public class MemberEndpoint implements CustomEndpoint {
                     .flatMap(groups -> ServerResponse.ok().bodyValue(groups));
             })
             .doOnError(error -> log.error("获取分组列表失败", error));
+    }
+
+    /**
+     * 服务端代理获取 QQ 昵称信息。
+     * 前端浏览器直接请求第三方接口会被 CORS 拦截并可能返回 403，
+     * 改由服务端请求 uapis.cn 接口后返回归一化结果，规避跨域与网络限制。
+     */
+    private Mono<ServerResponse> fetchQqInfo(ServerRequest request) {
+        String qq = request.queryParam("qq").orElse("").trim();
+        if (!qq.matches("^\\d{5,12}$")) {
+            return ServerResponse.badRequest()
+                .bodyValue(new ErrorResponse("QQ号格式不正确"));
+        }
+        final String finalQq = qq;
+        return Mono.fromCallable(() -> requestQqInfo(finalQq))
+            .subscribeOn(Schedulers.boundedElastic())
+            .flatMap(info -> ServerResponse.ok().bodyValue(info))
+            .onErrorResume(error -> {
+                log.warn("获取 QQ 信息失败, qq={}: {}", finalQq, error.getMessage());
+                return ServerResponse.ok()
+                    .bodyValue(new QqInfoResponse(finalQq, "", tencentAvatar(finalQq),
+                        finalQq + "@qq.com"));
+            });
+    }
+
+    /**
+     * 多源兜底获取 QQ 信息：
+     * <ul>
+     *   <li>头像：直接由腾讯官方地址构造，无需任何第三方接口，永远可用。</li>
+     *   <li>昵称：优先 uapis.cn（返回干净 UTF-8），失败或为空时退回腾讯官方接口
+     *       （GBK 编码的 JSONP），保证正常账号昵称一定能取到。</li>
+     * </ul>
+     */
+    private QqInfoResponse requestQqInfo(String qq) {
+        String nickname = nicknameFromUapis(qq);
+        if (nickname.isEmpty()) {
+            nickname = nicknameFromTencent(qq);
+        }
+        return new QqInfoResponse(qq, nickname, tencentAvatar(qq), qq + "@qq.com");
+    }
+
+    /**
+     * 腾讯官方头像地址，无需接口调用即可直接展示
+     */
+    private static String tencentAvatar(String qq) {
+        return "https://q.qlogo.cn/g?b=qq&nk=" + qq + "&s=640";
+    }
+
+    /**
+     * 通过 uapis.cn 获取昵称（干净 UTF-8）；任何异常都降级为空字符串，交由上层继续兜底
+     */
+    private String nicknameFromUapis(String qq) {
+        try {
+            URI uri = URI.create("https://uapis.cn/api/v1/social/qq/userinfo?qq="
+                + URLEncoder.encode(qq, StandardCharsets.UTF_8));
+            String body = httpGetString(uri, StandardCharsets.UTF_8);
+            if (body == null || body.isBlank()) {
+                return "";
+            }
+            JsonNode root = QQ_OBJECT_MAPPER.readTree(body);
+            String nickname = firstText(root, "nickname", "nick", "name", "userName");
+            if (nickname.isEmpty() && root.has("data") && root.get("data").isObject()) {
+                nickname = firstText(root.get("data"), "nickname", "nick", "name", "userName");
+            }
+            return nickname;
+        } catch (Exception e) {
+            log.debug("uapis.cn 获取 QQ 昵称失败, qq={}: {}", qq, e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * 通过腾讯官方 cgi_get_portrait.fcg 获取昵称。
+     * 返回形如 {@code portraitCallBack({"QQ":[avatar,...,"NICK",0]})} 的 GBK 编码 JSONP，
+     * 昵称位于数组下标 6。
+     */
+    private String nicknameFromTencent(String qq) {
+        try {
+            URI uri = URI.create(
+                "https://users.qzone.qq.com/fcg-bin/cgi_get_portrait.fcg?uins="
+                    + URLEncoder.encode(qq, StandardCharsets.UTF_8));
+            String body = httpGetString(uri, Charset.forName("GBK"));
+            if (body == null || body.isBlank()) {
+                return "";
+            }
+            int start = body.indexOf('(');
+            int end = body.lastIndexOf(')');
+            if (start < 0 || end <= start) {
+                return "";
+            }
+            JsonNode root = QQ_OBJECT_MAPPER.readTree(body.substring(start + 1, end));
+            JsonNode arr = root.get(qq);
+            if (arr != null && arr.isArray() && arr.size() > 6 && arr.get(6).isTextual()) {
+                return arr.get(6).asText().trim();
+            }
+            return "";
+        } catch (Exception e) {
+            log.debug("腾讯接口获取 QQ 昵称失败, qq={}: {}", qq, e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * 以指定字符集执行一次 GET 请求并返回响应文本
+     */
+    private static String httpGetString(URI uri, Charset charset) throws Exception {
+        HttpRequest httpRequest = HttpRequest.newBuilder(uri)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Accept", "*/*")
+            .timeout(Duration.ofSeconds(8))
+            .GET()
+            .build();
+        HttpResponse<byte[]> response = QQ_HTTP_CLIENT.send(httpRequest,
+            HttpResponse.BodyHandlers.ofByteArray());
+        byte[] bytes = response.body();
+        if (bytes == null) {
+            return "";
+        }
+        return new String(bytes, charset);
+    }
+
+    /**
+     * 按优先级从 JSON 节点中取第一个非空的文本字段值
+     */
+    private static String firstText(JsonNode node, String... fields) {
+        if (node == null) {
+            return "";
+        }
+        for (String field : fields) {
+            JsonNode value = node.get(field);
+            if (value != null && value.isTextual()) {
+                String text = value.asText().trim();
+                if (!text.isEmpty()) {
+                    return text;
+                }
+            }
+        }
+        return "";
     }
 
     /**
@@ -173,4 +333,9 @@ public class MemberEndpoint implements CustomEndpoint {
      * 错误响应
      */
     public record ErrorResponse(String message) {}
+
+    /**
+     * QQ 信息代理响应
+     */
+    public record QqInfoResponse(String qq, String nickname, String avatar, String email) {}
 }

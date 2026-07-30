@@ -22,6 +22,7 @@ const data = ref<MemberFormState>({
   school: "",
   qq: "",
   avatar: "",
+  background: "",
   qqFriendLink: "",
   groupName: "",
   status: "PENDING",
@@ -178,6 +179,7 @@ async function onSubmit() {
 
         <FormKit type="email" name="email" v-model="data.email" label="邮箱" help="用于审核通知" @input="() => userModified.email = true" />
         <FormKit type="attachment" name="avatar" v-model="data.avatar" label="头像" @input="() => userModified.avatar = true" />
+        <FormKit type="attachment" name="background" v-model="data.background" label="背景图" help="成员卡片背景图片" />
         <FormKit type="select" name="groupName" v-model="data.groupName" label="所属分组"
           :options="[
             { label: '无分组', value: '' },

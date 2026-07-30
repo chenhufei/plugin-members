@@ -14,6 +14,7 @@ export interface Member {
     school?: string;
     qq?: string;
     avatar?: string;
+    background?: string;
     qqFriendLink?: string;
     groupName?: string;
     status: string;
@@ -48,6 +49,7 @@ export interface MemberFormState {
   school: string;
   qq: string;
   avatar: string;
+  background: string;
   qqFriendLink: string;
   groupName: string;
   status: string;

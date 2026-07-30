@@ -13,6 +13,8 @@ import {
 import { useQuery } from "@tanstack/vue-query";
 import { computed, defineAsyncComponent, ref, shallowRef } from "vue";
 import { membersBatchApiClient, membersCoreApiClient } from "@/api";
+import FilterDropdown from "@/components/FilterDropdown.vue";
+import MemberWithdrawModal from "@/components/MemberWithdrawModal.vue";
 
 import type { Member } from "@/types";
 
