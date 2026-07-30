@@ -34,7 +34,7 @@
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-qq">QQ 号 <span class="member-apply-widget-form-req">*</span></label>
               <div class="member-apply-widget-qq-row">
-                <input class="member-apply-widget-form-input" id="ma-qq" name="qq" type="text" required pattern="\\d{5,12}" placeholder="5-12 位数字，填写后自动获取昵称和邮箱" />
+                <input class="member-apply-widget-form-input" id="ma-qq" name="qq" type="text" required pattern="\\d{5,12}" placeholder="5-12 位数字，填写后自动获取昵称" />
                 <button type="button" class="member-apply-widget-btn-mini" id="ma-fetchQq" onclick="MemberApplyWidget.fetchQqInfo()">获取信息</button>
               </div>
               <div class="member-apply-widget-form-hint" id="ma-qqHint">填写 QQ 号后点击「获取信息」，自动填充昵称与 QQ 邮箱。</div>
@@ -45,7 +45,10 @@
             </div>
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-email">邮箱 <span class="member-apply-widget-form-req">*</span></label>
-              <input class="member-apply-widget-form-input" id="ma-email" name="email" type="email" required placeholder="用于审核通知" />
+              <div class="member-apply-widget-qq-row">
+                <input class="member-apply-widget-form-input" id="ma-email" name="email" type="email" required placeholder="用于审核通知" />
+                <button type="button" class="member-apply-widget-btn-mini" id="ma-qqEmailBtn" onclick="MemberApplyWidget.fillQqEmail()">QQ邮箱</button>
+              </div>
             </div>
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-school">学校 <span class="member-apply-widget-form-req">*</span></label>
@@ -394,12 +397,6 @@
       return;
     }
 
-    // 立即填充 QQ 邮箱（无需请求）
-    var emailInput = document.getElementById('ma-email');
-    if (emailInput && !emailInput.value.trim()) {
-      emailInput.value = qq + '@qq.com';
-    }
-
     fetchBtn.disabled = true;
     fetchBtn.textContent = '获取中...';
     setQqHint('正在获取 QQ 昵称...', '');
@@ -420,7 +417,7 @@
     var abortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var timeoutId = setTimeout(function() {
       if (abortCtrl) { try { abortCtrl.abort(); } catch (_) {} }
-      cleanup(null, null, '昵称获取超时，邮箱已自动填入，昵称请手动填写。');
+      cleanup(null, null, '昵称获取超时，请手动填写或稍后重试。');
     }, 8000);
 
     try {
@@ -453,25 +450,39 @@
             nickname = nickname.trim();
             if (nickname.length > 0) {
               var nameInput = document.getElementById('ma-displayName');
-              if (nameInput && !nameInput.value.trim()) {
+              // 强制更新账号名称，即使已有值
+              if (nameInput) {
                 nameInput.value = nickname;
               }
-              cleanup(null, '已自动填充 QQ 昵称和邮箱。', null);
+              cleanup(null, '已获取 QQ 昵称，可点击「QQ邮箱」按钮自动填充邮箱。', null);
               return;
             }
           }
-          // 未获取到昵称，仍提示邮箱已填入
+          // 未获取到昵称
           var reason = (d && (d.message || d.msg)) ? '：' + (d.message || d.msg) : '';
-          cleanup(null, null, '未获取到昵称' + reason + '，邮箱已自动填入，昵称请手动填写。');
+          cleanup(null, null, '未获取到昵称' + reason + '，请手动填写。');
         })
         .catch(function(err) {
           try { clearTimeout(timeoutId); } catch (_) {}
-          cleanup(null, null, '获取信息失败（网络限制），邮箱已自动填入，昵称请手动填写。');
+          cleanup(null, null, '获取信息失败（网络限制），请手动填写昵称。');
         });
     } catch (e) {
       try { clearTimeout(timeoutId); } catch (_) {}
-      cleanup(null, null, '获取信息失败，邮箱已自动填入，昵称请手动填写。');
+      cleanup(null, null, '获取信息失败，请手动填写昵称。');
     }
+  }
+
+  function fillQqEmail() {
+    var qqInput = document.getElementById('ma-qq');
+    var emailInput = document.getElementById('ma-email');
+    if (!qqInput || !emailInput) return;
+    var qq = qqInput.value.trim();
+    if (!/^\d{5,12}$/.test(qq)) {
+      setQqHint('请先填写有效的 QQ 号（5-12 位数字）。', 'error');
+      return;
+    }
+    emailInput.value = qq + '@qq.com';
+    setQqHint('已填入 QQ 邮箱。', 'success');
   }
 
   // ===== 二维码解析（上传图片自动识别 QQ 好友链接） =====
@@ -547,7 +558,7 @@
       var qqHint = document.getElementById('ma-qqHint');
       if (qqHint) {
         qqHint.className = 'member-apply-widget-form-hint';
-        qqHint.textContent = '填写 QQ 号后点击「获取信息」，自动填充昵称与 QQ 邮箱。';
+        qqHint.textContent = '填写 QQ 号后点击「获取信息」，自动获取昵称。';
       }
       var qrHint = document.getElementById('ma-qrHint');
       if (qrHint) {
@@ -570,7 +581,8 @@
     },
 
     fetchQqInfo: fetchQqInfo,
-    parseQrCode: parseQrCode
+    parseQrCode: parseQrCode,
+    fillQqEmail: fillQqEmail
   };
 
   document.addEventListener('keydown', function(e) {
