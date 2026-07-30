@@ -14,6 +14,13 @@ spec:
           label: 开启自动审核
           help: 新成员申请后自动审核通过，无需管理员手动审核
           value: false
+        - $formkit: switch
+          name: autoApproveWithdraw
+          id: autoApproveWithdraw
+          key: autoApproveWithdraw
+          label: 自动审核撤回申请
+          help: 用户提交的撤回申请自动通过，无需管理员手动审核
+          value: false
         - $formkit: radio
           name: sendEmail
           id: sendEmail

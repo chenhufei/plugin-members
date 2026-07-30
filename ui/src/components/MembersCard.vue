@@ -101,16 +101,26 @@ function handleReject(member: Member) {
 }
 
 function handleRevert(member: Member) {
+  const reverting = ref(false);
+  
   Dialog.warning({
     title: "撤回审核？",
     description: `将「${member.spec.displayName}」的状态恢复为待审核。`,
     confirmType: "primary",
+    confirmText: "确认撤回",
+    showCancel: true,
+    cancelText: "取消",
     onConfirm: async () => {
-      await membersCoreApiClient.member.patch(member.metadata.name, [
+      if (reverting.value) return;
+      reverting.value = true;
+      const patchOps: Array<{ op: string; path: string; value?: string }> = [
         { op: "add", path: "/spec/status", value: "PENDING" },
-      ]);
+        { op: "add", path: "/metadata/annotations/member.plugin.halo.run~1review-description", value: "已撤回审核，恢复待审核状态" },
+      ];
+      await membersCoreApiClient.member.patch(member.metadata.name, patchOps);
       Toast.success("已撤回");
       queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
+      reverting.value = false;
     },
   });
 }

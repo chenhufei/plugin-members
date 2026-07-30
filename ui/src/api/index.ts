@@ -157,3 +157,40 @@ export const membersBatchApiClient: MembersBatchApiClient = {
     },
   },
 };
+
+// ==================== 撤回申请相关 API ====================
+
+/**
+ * 发送验证码
+ */
+export async function sendWithdrawVerificationCode(data: { email: string; qq: string }): Promise<any> {
+  return axiosInstance.post('/membersubmits/-/send-verification-code', data)
+}
+
+/**
+ * 提交撤回申请
+ */
+export async function submitWithdrawRequest(data: { email: string; code: string; qq: string; reason?: string }): Promise<any> {
+  return axiosInstance.post('/membersubmits/-/withdraw', data)
+}
+
+/**
+ * 获取撤回申请列表（管理员）
+ */
+export async function getWithdrawRequests(): Promise<any> {
+  return axiosInstance.get('/members/-/withdraw-requests')
+}
+
+/**
+ * 批准撤回申请（管理员）
+ */
+export async function approveWithdraw(memberName: string): Promise<any> {
+  return axiosInstance.post(`/members/-/withdraw-approve/${memberName}`)
+}
+
+/**
+ * 拒绝撤回申请（管理员）
+ */
+export async function rejectWithdraw(memberName: string): Promise<any> {
+  return axiosInstance.post(`/members/-/withdraw-reject/${memberName}`)
+}

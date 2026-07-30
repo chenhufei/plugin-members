@@ -79,6 +79,29 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
                         userNoticeSubscription(email);
                     }
 
+                    // WITHDRAW_REQUESTED 状态：清除撤回标记后恢复为PENDING
+                    if ("WITHDRAW_REQUESTED".equals(status) && member.getMetadata().getAnnotations() != null
+                            && member.getMetadata().getAnnotations().containsKey("member.plugin.halo.run/withdraw-reviewed-at")) {
+                        log.info("Member {} withdraw reviewed, resetting to PENDING", request.name());
+                        // 恢复原始状态
+                        String statusBefore = member.getMetadata().getAnnotations().get("member.plugin.halo.run/status-before-withdraw");
+                        if (StringUtils.isNotEmpty(statusBefore)) {
+                            spec.setStatus(statusBefore);
+                        } else {
+                            spec.setStatus("PENDING");
+                        }
+                        // 清除撤回标记
+                        member.getMetadata().getAnnotations().remove("member.plugin.halo.run/withdraw-review-action");
+                        member.getMetadata().getAnnotations().remove("member.plugin.halo.run/withdraw-reviewed-at");
+                        member.getMetadata().getAnnotations().remove("member.plugin.halo.run/status-before-withdraw");
+                        member.getMetadata().getAnnotations().remove("member.plugin.halo.run/withdraw-email");
+                        member.getMetadata().getAnnotations().remove("member.plugin.halo.run/withdraw-reason");
+                        client.update(member);
+                        log.info("Publishing MemberEvent for: {}", request.name());
+                        eventPublisher.publishEvent(new MemberEvent(this, member));
+                        return;
+                    }
+
                     client.update(member);
                     log.info("Publishing MemberEvent for: {}", request.name());
                     eventPublisher.publishEvent(new MemberEvent(this, member));

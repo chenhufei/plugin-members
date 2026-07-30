@@ -37,6 +37,9 @@ public class Member extends AbstractExtension {
         @Schema(description = "头像地址")
         private String avatar;
 
+        @Schema(description = "背景图地址")
+        private String background;
+
         @Schema(description = "QQ加好友链接")
         private String qqFriendLink;
 
@@ -46,7 +49,7 @@ public class Member extends AbstractExtension {
         @Schema(description = "所属分组")
         private String groupName;
 
-        @Schema(description = "审核状态: PENDING(待审核), APPROVED(已通过), REJECTED(已拒绝)")
+        @Schema(description = "审核状态: PENDING(待审核), APPROVED(已通过), REJECTED(已拒绝), WITHDRAW_REQUESTED(申请撤回中)")
         private String status = "PENDING";
 
         // 保留旧字段以兼容现有数据

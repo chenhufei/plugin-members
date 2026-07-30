@@ -118,3 +118,71 @@ spec:
         </div>
         <div></div>
       </div>
+
+---
+apiVersion: notification.halo.run/v1alpha1
+kind: NotificationTemplate
+metadata:
+  name: template-admin-member-withdraw
+spec:
+  reasonSelector:
+    reasonType: admin-member-withdraw
+    language: default
+  template:
+    title: "有新的成员撤回申请待处理"
+    rawBody: |
+      管理员您好，有用户提交了成员撤回申请：
+      申请成员：${displayName}
+      QQ号：${qq}
+      撤回邮箱：${withdrawEmail}
+      撤回原因：${withdrawReason}
+      当前状态：${statusBefore}
+    htmlBody: |
+      <div class="content">
+        <div class="head">
+          <p class="honorific">管理员您好：</p>
+        </div>
+        <div class="body">
+          <div class="summary">
+            <p>有用户提交了成员撤回申请，请及时处理：</p>
+            <ul>
+              <li><strong>申请成员：</strong>${displayName}</li>
+              <li><strong>QQ号：</strong>${qq}</li>
+              <li><strong>撤回邮箱：</strong>${withdrawEmail}</li>
+              <li><strong>撤回原因：</strong>${withdrawReason}</li>
+              <li><strong>当前状态：</strong>${statusBefore}</li>
+            </ul>
+          </div>
+        </div>
+        <div></div>
+      </div>
+
+---
+apiVersion: notification.halo.run/v1alpha1
+kind: NotificationTemplate
+metadata:
+  name: template-user-member-withdraw-review
+spec:
+  reasonSelector:
+    reasonType: user-member-withdraw-review
+    language: default
+  template:
+    title: "您的撤回申请已处理完成"
+    rawBody: |
+      您提交的成员撤回申请处理结果为：${reviewResult}
+      {{#if status}}当前状态：${status}{{/if}}
+    htmlBody: |
+      <div class="content">
+        <div class="head">
+          <p class="honorific">${subscriber.displayName} 你好：</p>
+        </div>
+        <div class="body">
+          <div class="summary">
+            <p>您提交的成员撤回申请处理结果为：<strong>${reviewResult}</strong></p>
+            <p th:if="${status != null and status != ''}">当前状态：${status}</p>
+            <p th:if="${reviewResult == 'APPROVED'}">您的撤回申请已通过，申请已恢复为待审核状态。请等待管理员重新审核。</p>
+            <p th:if="${reviewResult == 'REJECTED'}">您的撤回申请未通过，您的申请状态保持不变。</p>
+          </div>
+        </div>
+        <div></div>
+      </div>

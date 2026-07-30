@@ -152,7 +152,7 @@ public class NotificationReasonPublisher {
 
         public void publishReasonBy(Member member, String adminEmail) {
             log.info("发布管理员通知: 成员={}, 管理员邮箱={}", member.getMetadata().getName(), adminEmail);
-            String url = externalLinkProcessor.processLink("/console/plugins/PluginMembers");
+            String url = externalLinkProcessor.processLink("/members");
             var spec = member.getSpec();
             
             var reasonSubject = Reason.Subject.builder()
@@ -201,7 +201,7 @@ public class NotificationReasonPublisher {
 
         public void publishReasonBy(Member member, String email) {
             log.info("发布用户通知: 成员={}, 用户邮箱={}", member.getMetadata().getName(), email);
-            String url = externalLinkProcessor.processLink("/console/plugins/PluginMembers");
+            String url = externalLinkProcessor.processLink("/members");
             var spec = member.getSpec();
             
             var reasonSubject = Reason.Subject.builder()
@@ -243,7 +243,7 @@ public class NotificationReasonPublisher {
                 member.getMetadata().getName(), email, member.getSpec().getStatus());
             var annotations = MetadataUtil.nullSafeAnnotations(member);
             String reviewDescription = annotations.get(REVIEW_DESCRIPTION);
-            String url = externalLinkProcessor.processLink("/console/plugins/PluginMembers");
+            String url = externalLinkProcessor.processLink("/members");
             var spec = member.getSpec();
             
             var reasonSubject = Reason.Subject.builder()
@@ -286,7 +286,7 @@ public class NotificationReasonPublisher {
                 member.getMetadata().getName(), email);
             var annotations = MetadataUtil.nullSafeAnnotations(member);
             String reviewDescription = annotations.get(REVIEW_DESCRIPTION);
-            String url = externalLinkProcessor.processLink("/console/plugins/PluginMembers");
+            String url = externalLinkProcessor.processLink("/members");
             var spec = member.getSpec();
             
             var reasonSubject = Reason.Subject.builder()

@@ -16,6 +16,7 @@ public interface SettingConfigMember {
         public static final String GROUP = "basic";
 
         private boolean autoApprove;
+        private boolean autoApproveWithdraw;
         private boolean sendEmail;
         private String adminEmail;
         private String defaultGroupName;
