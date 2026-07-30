@@ -41,7 +41,10 @@
             </div>
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-displayName">账号名称 <span class="member-apply-widget-form-req">*</span></label>
-              <input class="member-apply-widget-form-input" id="ma-displayName" name="displayName" type="text" required maxlength="50" placeholder="2-50 字符" />
+              <div class="member-apply-widget-qq-row">
+                <input class="member-apply-widget-form-input" id="ma-displayName" name="displayName" type="text" required maxlength="50" placeholder="2-50 字符" />
+                <button type="button" class="member-apply-widget-btn-mini" id="ma-qqNicknameBtn" onclick="MemberApplyWidget.fillQqNickname()">QQ昵称</button>
+              </div>
             </div>
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-email">邮箱 <span class="member-apply-widget-form-req">*</span></label>
@@ -316,6 +319,7 @@
           groupSelect.innerHTML = '<option value="">暂无可申请的分组</option>';
           return;
         }
+        groupsData = groups; // 存储分组数据
         groups.forEach(function(g) {
           var opt = document.createElement('option');
           opt.value = g.metadata.name;
@@ -455,6 +459,8 @@
                 nameInput.value = nickname;
               }
               cleanup(null, '已获取 QQ 昵称，可点击「QQ邮箱」按钮自动填充邮箱。', null);
+              // 尝试自动选择分组
+              autoSelectGroup({ nickname: nickname });
               return;
             }
           }
@@ -472,6 +478,53 @@
     }
   }
 
+  function fillQqNickname() {
+    var qqInput = document.getElementById('ma-qq');
+    var nameInput = document.getElementById('ma-displayName');
+    if (!qqInput || !nameInput) return;
+    var qq = qqInput.value.trim();
+    if (!/^\d{5,12}$/.test(qq)) {
+      setQqHint('请先填写有效的 QQ 号（5-12 位数字）。', 'error');
+      return;
+    }
+    
+    // 调用获取QQ信息接口
+    var btn = document.getElementById('ma-qqNicknameBtn');
+    btn.disabled = true;
+    btn.textContent = '获取中...';
+    
+    fetch(API_BASE + '/qq-info?qq=' + encodeURIComponent(qq), {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store'
+    })
+      .then(function(res) {
+        return res.text().then(function(txt) {
+          var data = null;
+          try { data = txt ? JSON.parse(txt) : null; } catch (_) { data = { raw: txt }; }
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function(res) {
+        btn.disabled = false;
+        btn.textContent = 'QQ昵称';
+        
+        if (res.ok && res.data && res.data.nickname) {
+          nameInput.value = res.data.nickname.trim();
+          setQqHint('已填入 QQ 昵称。', 'success');
+          // 尝试自动选择分组
+          autoSelectGroup(res.data);
+        } else {
+          setQqHint('未获取到昵称，请手动填写。', 'error');
+        }
+      })
+      .catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'QQ昵称';
+        setQqHint('获取昵称失败，请手动填写。', 'error');
+      });
+  }
+
   function fillQqEmail() {
     var qqInput = document.getElementById('ma-qq');
     var emailInput = document.getElementById('ma-email');
@@ -483,6 +536,136 @@
     }
     emailInput.value = qq + '@qq.com';
     setQqHint('已填入 QQ 邮箱。', 'success');
+  }
+
+  // 地区关键字映射
+  var regionKeywords = {
+    '北京': ['北京', 'Beijing'],
+    '上海': ['上海', 'Shanghai'],
+    '广东': ['广东', '广州', '深圳', '东莞', '佛山', '珠海', '汕头', 'Guangdong', 'Guangzhou', 'Shenzhen', 'Foshan', 'Zhuhai'],
+    '江苏': ['江苏', '南京', '苏州', '无锡', '常州', 'Jiangsu', 'Nanjing', 'Suzhou', 'Wuxi', 'Changzhou'],
+    '浙江': ['浙江', '杭州', '宁波', '温州', 'Zhejiang', 'Hangzhou', 'Ningbo', 'Wenzhou'],
+    '山东': ['山东', '济南', '青岛', 'Shandong', 'Jinan', 'Qingdao'],
+    '四川': ['四川', '成都', 'Sichuan', 'Chengdu'],
+    '湖北': ['湖北', '武汉', 'Hubei', 'Wuhan'],
+    '湖南': ['湖南', '长沙', 'Hunan', 'Changsha'],
+    '河南': ['河南', '郑州', 'Henan', 'Zhengzhou'],
+    '河北': ['河北', '石家庄', 'Hebei', 'Shijiazhuang'],
+    '福建': ['福建', '福州', '厦门', '泉州', 'Fujian', 'Fuzhou', 'Xiamen', 'Quanzhou'],
+    '陕西': ['陕西', '西安', 'Shaanxi', 'Xi\'an'],
+    '辽宁': ['辽宁', '沈阳', '大连', 'Liaoning', 'Shenyang', 'Dalian'],
+    '黑龙江': ['黑龙江', '哈尔滨', 'Heilongjiang', 'Harbin'],
+    '吉林': ['吉林', '长春', 'Jilin', 'Changchun'],
+    '安徽': ['安徽', '合肥', 'Anhui', 'Hefei'],
+    '江西': ['江西', '南昌', 'Jiangxi', 'Nanchang'],
+    '重庆': ['重庆', 'Chongqing'],
+    '天津': ['天津', 'Tianjin'],
+    '云南': ['云南', '昆明', 'Yunnan', 'Kunming'],
+    '贵州': ['贵州', '贵阳', 'Guizhou', 'Guiyang'],
+    '广西': ['广西', '南宁', '桂林', 'Guangxi', 'Nanning', 'Guilin'],
+    '海南': ['海南', '海口', 'Hainan', 'Haikou'],
+    '内蒙古': ['内蒙古', '呼和浩特', 'Inner Mongolia', 'Hohhot'],
+    '新疆': ['新疆', '乌鲁木齐', 'Xinjiang', 'Urumqi'],
+    '西藏': ['西藏', '拉萨', 'Tibet', 'Lhasa'],
+    '甘肃': ['甘肃', '兰州', 'Gansu', 'Lanzhou'],
+    '青海': ['青海', '西宁', 'Qinghai', 'Xining'],
+    '宁夏': ['宁夏', '银川', 'Ningxia', 'Yinchuan'],
+    '山西': ['山西', '太原', 'Shanxi', 'Taiyuan'],
+    '台湾': ['台湾', 'Taiwan'],
+    '香港': ['香港', 'Hong Kong', 'HK'],
+    '澳门': ['澳门', 'Macau', 'MO']
+  };
+
+  var groupsData = [];
+  var lastSchoolValue = '';
+
+  function autoSelectGroup(qqData) {
+    if (!groupSelect || !groupSelect.options || groupSelect.options.length === 0) return;
+    
+    var region = null;
+    
+    // 1. 优先从QQ数据获取IP地区（如果后端提供）
+    if (qqData && qqData.region) {
+      region = qqData.region;
+    }
+    
+    // 2. 从学校名称判断地区
+    if (!region) {
+      var schoolInput = document.getElementById('ma-school');
+      if (schoolInput) {
+        var school = schoolInput.value.trim();
+        if (school) {
+          region = detectRegion(school);
+        }
+      }
+    }
+    
+    // 3. 从账号名称判断地区
+    if (!region) {
+      var nameInput = document.getElementById('ma-displayName');
+      if (nameInput) {
+        var name = nameInput.value.trim();
+        if (name) {
+          region = detectRegion(name);
+        }
+      }
+    }
+    
+    // 4. 如果检测到地区，自动选择对应的分组
+    if (region) {
+      selectGroupByRegion(region);
+    }
+  }
+
+  // 监听学校输入变化，自动选择分组
+  function setupSchoolListener() {
+    var schoolInput = document.getElementById('ma-school');
+    if (!schoolInput) return;
+    
+    // 防抖，避免频繁触发
+    var debounceTimer = null;
+    schoolInput.addEventListener('input', function() {
+      var value = this.value.trim();
+      if (value === lastSchoolValue) return;
+      lastSchoolValue = value;
+      
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        if (value && value.length >= 2) {
+          autoSelectGroup({});
+        }
+      }, 500);
+    });
+  }
+
+  function detectRegion(text) {
+    text = text.toLowerCase();
+    for (var regionName in regionKeywords) {
+      var keywords = regionKeywords[regionName];
+      for (var i = 0; i < keywords.length; i++) {
+        if (text.indexOf(keywords[i].toLowerCase()) !== -1) {
+          return regionName;
+        }
+      }
+    }
+    return null;
+  }
+
+  function selectGroupByRegion(region) {
+    for (var i = 0; i < groupSelect.options.length; i++) {
+      var option = groupSelect.options[i];
+      var groupName = option.textContent || option.value;
+      groupName = groupName.toLowerCase();
+      var regionLower = region.toLowerCase();
+      
+      // 检查分组名是否包含地区名
+      if (groupName.indexOf(regionLower) !== -1) {
+        groupSelect.selectedIndex = i;
+        setQqHint('已自动选择分组：' + option.textContent, 'success');
+        return true;
+      }
+    }
+    return false;
   }
 
   // ===== 二维码解析（上传图片自动识别 QQ 好友链接） =====
@@ -568,6 +751,7 @@
       modal.classList.add('is-open');
       document.body.style.overflow = 'hidden';
       loadGroups();
+      setupSchoolListener(); // 设置学校输入监听
     },
 
     close: function() {
@@ -582,7 +766,9 @@
 
     fetchQqInfo: fetchQqInfo,
     parseQrCode: parseQrCode,
-    fillQqEmail: fillQqEmail
+    fillQqEmail: fillQqEmail,
+    fillQqNickname: fillQqNickname,
+    autoSelectGroup: autoSelectGroup
   };
 
   document.addEventListener('keydown', function(e) {
