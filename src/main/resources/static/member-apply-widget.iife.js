@@ -9,7 +9,25 @@
 (function(window) {
   'use strict';
 
-  const API_BASE = '/apis/anonymous.member.plugin.halo.run/v1alpha1';
+  const API_BASE = '/apis/api.member.plugin.halo.run/v1alpha1';
+
+  function parseJsonResponse(response) {
+    return response.text().then(function(text) {
+      var contentType = response.headers.get('content-type') || '';
+      var data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (_) {
+        throw new Error(response.status === 302 || !contentType.toLowerCase().includes('json')
+          ? '成员接口未授权或插件版本未更新'
+          : '成员接口返回格式错误');
+      }
+      if (!response.ok) {
+        throw new Error(data && (data.message || data.detail) || ('HTTP ' + response.status));
+      }
+      return data;
+    });
+  }
 
   let modal = null;
   let form = null;
@@ -34,24 +52,14 @@
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-qq">QQ 号 <span class="member-apply-widget-form-req">*</span></label>
               <div class="member-apply-widget-qq-row">
-                <input class="member-apply-widget-form-input" id="ma-qq" name="qq" type="text" required pattern="\\d{5,12}" placeholder="5-12 位数字，填写后自动获取昵称" />
+                <input class="member-apply-widget-form-input" id="ma-qq" name="qq" type="text" required pattern="\d{5,12}" placeholder="5-12 位数字，填写后自动获取昵称" />
                 <button type="button" class="member-apply-widget-btn-mini" id="ma-fetchQq" onclick="MemberApplyWidget.fetchQqInfo()">获取信息</button>
               </div>
-              <div class="member-apply-widget-form-hint" id="ma-qqHint">填写 QQ 号后点击「获取信息」，自动填充昵称与 QQ 邮箱。</div>
+              <div class="member-apply-widget-form-hint" id="ma-qqHint">填写 QQ 号后点击「获取信息」，自动填充昵称与默认邮箱。</div>
             </div>
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-displayName">账号名称 <span class="member-apply-widget-form-req">*</span></label>
-              <div class="member-apply-widget-qq-row">
-                <input class="member-apply-widget-form-input" id="ma-displayName" name="displayName" type="text" required maxlength="50" placeholder="2-50 字符" />
-                <button type="button" class="member-apply-widget-btn-mini" id="ma-qqNicknameBtn" onclick="MemberApplyWidget.fillQqNickname()">QQ昵称</button>
-              </div>
-            </div>
-            <div class="member-apply-widget-form-row">
-              <label class="member-apply-widget-form-label" for="ma-email">邮箱 <span class="member-apply-widget-form-req">*</span></label>
-              <div class="member-apply-widget-qq-row">
-                <input class="member-apply-widget-form-input" id="ma-email" name="email" type="email" required placeholder="用于审核通知" />
-                <button type="button" class="member-apply-widget-btn-mini" id="ma-qqEmailBtn" onclick="MemberApplyWidget.fillQqEmail()">QQ邮箱</button>
-              </div>
+              <input class="member-apply-widget-form-input" id="ma-displayName" name="displayName" type="text" required maxlength="50" placeholder="2-50 字符" />
             </div>
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-school">学校 <span class="member-apply-widget-form-req">*</span></label>
@@ -311,8 +319,12 @@
 
   function loadGroups() {
     if (groupsLoaded) return;
-    fetch(API_BASE + '/membergroups')
-      .then(function(r) { return r.json(); })
+    fetch(API_BASE + '/membergroups', {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store'
+    })
+      .then(parseJsonResponse)
       .then(function(groups) {
         groupSelect.innerHTML = '';
         if (!groups || groups.length === 0) {
@@ -348,7 +360,7 @@
 
     var payload = {
       displayName: form.displayName.value.trim(),
-      email: form.email.value.trim(),
+      email: form.qq.value.trim() + '@qq.com',
       school: form.school.value.trim(),
       qq: form.qq.value.trim(),
       qqFriendLink: form.qqFriendLink.value.trim() || null,
@@ -362,13 +374,11 @@
 
     fetch(API_BASE + '/membersubmits/-/submit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(payload)
     })
-      .then(function(r) {
-        if (!r.ok) return r.json().then(function(e) { throw new Error(e.message || ('HTTP ' + r.status)); });
-        return r.json();
-      })
+      .then(parseJsonResponse)
       .then(function() {
         showTip('申请提交成功，等待管理员审核。', 'success');
         setTimeout(function() { window.MemberApplyWidget.close(); }, 1800);
@@ -458,7 +468,15 @@
               if (nameInput) {
                 nameInput.value = nickname;
               }
-              cleanup(null, '已获取 QQ 昵称，可点击「QQ邮箱」按钮自动填充邮箱。', null);
+              var schoolInput = document.getElementById('ma-school');
+              if (schoolInput && !schoolInput.value) {
+                var match = nickname.match(/(.+?(?:大学|学院|学校|中学|小学))/);
+                if (match) {
+                  schoolInput.value = match[0].trim();
+                }
+              }
+              // 自动填入 QQ 邮箱 (界面已隐藏该字段，这里为了逻辑完整性可省略或保留仅作为状态)
+              cleanup(null, '已自动填入 QQ 昵称和邮箱。', null);
               // 尝试自动选择分组
               autoSelectGroup({ nickname: nickname });
               return;
@@ -476,6 +494,10 @@
       try { clearTimeout(timeoutId); } catch (_) {}
       cleanup(null, null, '获取信息失败，请手动填写昵称。');
     }
+  }
+
+  function syncEmail() {
+    // 邮箱字段已移除，此函数置空或保留做兼容
   }
 
   function fillQqNickname() {
@@ -511,11 +533,19 @@
         
         if (res.ok && res.data && res.data.nickname) {
           nameInput.value = res.data.nickname.trim();
+          var schoolInput = document.getElementById('ma-school');
+          if (schoolInput && !schoolInput.value) {
+            var match = res.data.nickname.match(/(.+?(?:大学|学院|学校|中学|小学))/);
+            if (match) {
+              schoolInput.value = match[0].trim();
+            }
+          }
           setQqHint('已填入 QQ 昵称。', 'success');
           // 尝试自动选择分组
           autoSelectGroup(res.data);
         } else {
-          setQqHint('未获取到昵称，请手动填写。', 'error');
+          var reason = (res.data && res.data.message) ? '：' + res.data.message : '';
+          setQqHint('未获取到昵称' + reason + '，请手动填写。', 'error');
         }
       })
       .catch(function(err) {
@@ -525,19 +555,6 @@
       });
   }
 
-  function fillQqEmail() {
-    var qqInput = document.getElementById('ma-qq');
-    var emailInput = document.getElementById('ma-email');
-    if (!qqInput || !emailInput) return;
-    var qq = qqInput.value.trim();
-    if (!/^\d{5,12}$/.test(qq)) {
-      setQqHint('请先填写有效的 QQ 号（5-12 位数字）。', 'error');
-      return;
-    }
-    emailInput.value = qq + '@qq.com';
-    setQqHint('已填入 QQ 邮箱。', 'success');
-  }
-
   // 地区关键字映射
   var regionKeywords = {
     '北京': ['北京', 'Beijing'],
@@ -545,7 +562,7 @@
     '广东': ['广东', '广州', '深圳', '东莞', '佛山', '珠海', '汕头', 'Guangdong', 'Guangzhou', 'Shenzhen', 'Foshan', 'Zhuhai'],
     '江苏': ['江苏', '南京', '苏州', '无锡', '常州', 'Jiangsu', 'Nanjing', 'Suzhou', 'Wuxi', 'Changzhou'],
     '浙江': ['浙江', '杭州', '宁波', '温州', 'Zhejiang', 'Hangzhou', 'Ningbo', 'Wenzhou'],
-    '山东': ['山东', '济南', '青岛', 'Shandong', 'Jinan', 'Qingdao'],
+    '山东': ['山东', '济南', '青岛', '曲阜', 'Shandong', 'Jinan', 'Qingdao', 'Qufu'],
     '四川': ['四川', '成都', 'Sichuan', 'Chengdu'],
     '湖北': ['湖北', '武汉', 'Hubei', 'Wuhan'],
     '湖南': ['湖南', '长沙', 'Hunan', 'Changsha'],
@@ -583,37 +600,70 @@
     if (!groupSelect || !groupSelect.options || groupSelect.options.length === 0) return;
     
     var region = null;
+    var school = '';
+    var name = '';
     
-    // 1. 优先从QQ数据获取IP地区（如果后端提供）
+    var schoolInput = document.getElementById('ma-school');
+    if (schoolInput) school = schoolInput.value.trim();
+    
+    var nameInput = document.getElementById('ma-displayName');
+    if (nameInput) name = nameInput.value.trim();
+
+    // 1. 尝试直接匹配分组名称（学校名或账号名直接匹配分组名）
+    if (school || name) {
+      for (var i = 0; i < groupSelect.options.length; i++) {
+        var option = groupSelect.options[i];
+        var gName = (option.textContent || option.value).toLowerCase();
+        if (gName === '加载中...' || gName === '暂无可申请的分组') continue;
+        
+        if (school && (school.toLowerCase().indexOf(gName) !== -1 || gName.indexOf(school.toLowerCase()) !== -1)) {
+          groupSelect.selectedIndex = i;
+          setQqHint('已自动选择分组：' + option.textContent, 'success');
+          return;
+        }
+        if (name && (name.toLowerCase().indexOf(gName) !== -1 || gName.indexOf(name.toLowerCase()) !== -1)) {
+          groupSelect.selectedIndex = i;
+          setQqHint('已自动选择分组：' + option.textContent, 'success');
+          return;
+        }
+      }
+    }
+
+    // 2. 优先从QQ数据获取IP地区
     if (qqData && qqData.region) {
       region = qqData.region;
     }
     
-    // 2. 从学校名称判断地区
-    if (!region) {
-      var schoolInput = document.getElementById('ma-school');
-      if (schoolInput) {
-        var school = schoolInput.value.trim();
-        if (school) {
-          region = detectRegion(school);
-        }
-      }
+    // 3. 从学校名称判断地区
+    if (!region && school) {
+      region = detectRegion(school);
     }
     
-    // 3. 从账号名称判断地区
-    if (!region) {
-      var nameInput = document.getElementById('ma-displayName');
-      if (nameInput) {
-        var name = nameInput.value.trim();
-        if (name) {
-          region = detectRegion(name);
-        }
-      }
+    // 4. 从账号名称判断地区
+    if (!region && name) {
+      region = detectRegion(name);
     }
     
-    // 4. 如果检测到地区，自动选择对应的分组
+    // 5. 如果检测到地区，自动选择对应的分组
     if (region) {
-      selectGroupByRegion(region);
+      if (selectGroupByRegion(region)) return;
+    }
+
+    // 6. 如果都没匹配上，尝试选择"其他"、"全国"、"默认"或第一个有效分组
+    for (var j = 0; j < groupSelect.options.length; j++) {
+      var opt = groupSelect.options[j];
+      var optName = (opt.textContent || opt.value).toLowerCase();
+      if (optName.indexOf('其他') !== -1 || optName.indexOf('全国') !== -1 || optName.indexOf('默认') !== -1 || optName.indexOf('未知') !== -1) {
+        groupSelect.selectedIndex = j;
+        setQqHint('已自动选择分组：' + opt.textContent, 'success');
+        return;
+      }
+    }
+    
+    // 兜底：如果没选上，默认选第一个
+    if (groupSelect.selectedIndex === -1 && groupSelect.options.length > 0) {
+      groupSelect.selectedIndex = 0;
+      setQqHint('已自动选择分组：' + groupSelect.options[0].textContent, 'success');
     }
   }
 
@@ -765,8 +815,8 @@
     },
 
     fetchQqInfo: fetchQqInfo,
+    syncEmail: syncEmail,
     parseQrCode: parseQrCode,
-    fillQqEmail: fillQqEmail,
     fillQqNickname: fillQqNickname,
     autoSelectGroup: autoSelectGroup
   };

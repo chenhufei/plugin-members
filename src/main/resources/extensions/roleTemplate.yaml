@@ -35,3 +35,34 @@ rules:
   - apiGroups: [ "member.plugin.halo.run" ]
     resources: [ "members", "membergroups" ]
     verbs: [ "create", "patch", "update", "delete", "deletecollection" ]
+  - apiGroups: [ "console.api.member.plugin.halo.run" ]
+    resources: [ "members" ]
+    verbs: [ "get", "list", "create" ]
+
+---
+
+apiVersion: v1alpha1
+kind: Role
+metadata:
+  name: role-template-member-anonymous-public
+  labels:
+    halo.run/hidden: "true"
+    halo.run/role-template: "true"
+    rbac.authorization.halo.run/aggregate-to-anonymous: "true"
+  annotations:
+    rbac.authorization.halo.run/module: "成员"
+    rbac.authorization.halo.run/display-name: "成员公开访问"
+rules:
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "*" ]
+    verbs: [ "get", "create" ]
+  # CustomEndpoint routes are also matched as non-resource URLs by Halo's security chain.
+  - nonResourceURLs:
+      - "/apis/api.member.plugin.halo.run/v1alpha1/membergroups"
+      - "/apis/api.member.plugin.halo.run/v1alpha1/qq-info"
+      - "/apis/api.member.plugin.halo.run/v1alpha1/membersubmits/-/submit"
+    verbs: [ "get", "post" ]
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/members" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "get", "list", "create" ]

@@ -157,11 +157,6 @@ const sendVerificationCode = async () => {
       alert(data.message || '发送验证码失败')
       return false
     }
-    // 记录验证码（实际环境应隐藏此值）
-    const receivedCode = data.code
-    if (receivedCode) {
-      alert('验证码：' + receivedCode)
-    }
     return true
   } catch (err) {
     console.error('发送验证码失败:', err)

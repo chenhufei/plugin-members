@@ -85,7 +85,7 @@ public class MemberEndpoint implements CustomEndpoint {
 
     @Override
     public GroupVersion groupVersion() {
-        return GroupVersion.parseAPIVersion("anonymous.member.plugin.halo.run/v1alpha1");
+        return GroupVersion.parseAPIVersion("api.member.plugin.halo.run/v1alpha1");
     }
 
     /**
@@ -119,14 +119,15 @@ public class MemberEndpoint implements CustomEndpoint {
                 .bodyValue(new ErrorResponse("QQ号格式不正确"));
         }
         final String finalQq = qq;
-        return Mono.fromCallable(() -> requestQqInfo(finalQq))
-            .subscribeOn(Schedulers.boundedElastic())
+        return settingConfigMember.getBasicConfig()
+            .flatMap(config -> Mono.fromCallable(() -> requestQqInfo(finalQq, config.getUapisToken()))
+                .subscribeOn(Schedulers.boundedElastic()))
             .flatMap(info -> ServerResponse.ok().bodyValue(info))
             .onErrorResume(error -> {
                 log.warn("获取 QQ 信息失败, qq={}: {}", finalQq, error.getMessage());
                 return ServerResponse.ok()
                     .bodyValue(new QqInfoResponse(finalQq, "", tencentAvatar(finalQq),
-                        finalQq + "@qq.com"));
+                        finalQq + "@qq.com", ""));
             });
     }
 
@@ -138,12 +139,48 @@ public class MemberEndpoint implements CustomEndpoint {
      *       （GBK 编码的 JSONP），保证正常账号昵称一定能取到。</li>
      * </ul>
      */
-    private QqInfoResponse requestQqInfo(String qq) {
-        String nickname = nicknameFromUapis(qq);
-        if (nickname.isEmpty()) {
-            nickname = nicknameFromTencent(qq);
+    private QqInfoResponse requestQqInfo(String qq, String uapisToken) {
+        String nickname = "";
+        String region = "";
+        try {
+            JsonNode uapisData = uapisQqInfo(qq, uapisToken);
+            if (uapisData != null) {
+                if (uapisData.has("data") && uapisData.get("data").isObject()) {
+                    nickname = firstText(uapisData.get("data"), "nickname", "nick", "name", "userName");
+                    region = firstText(uapisData.get("data"), "location", "province", "city");
+                }
+                if (nickname.isEmpty()) {
+                    nickname = firstText(uapisData, "nickname", "nick", "name", "userName");
+                }
+                if (region.isEmpty()) {
+                    region = firstText(uapisData, "location", "province", "city");
+                }
+            }
+        } catch (Exception e) {
+            log.debug("uapis.cn 获取 QQ 信息失败, qq={}: {}", qq, e.getMessage());
         }
-        return new QqInfoResponse(qq, nickname, tencentAvatar(qq), qq + "@qq.com");
+
+        if (nickname.isEmpty() || isGarbled(nickname)) {
+            String tencentNickname = nicknameFromTencent(qq);
+            if (!tencentNickname.isEmpty() && !isGarbled(tencentNickname)) {
+                nickname = tencentNickname;
+            }
+        }
+        return new QqInfoResponse(qq, nickname, tencentAvatar(qq), qq + "@qq.com", region);
+    }
+
+    private boolean isGarbled(String text) {
+        if (text == null || text.isEmpty()) {
+            return false;
+        }
+        // 简单判断是否包含明显的乱码字符（如常见的 GBK 误解析生僻字）
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\ufffd' || c == '锟' || c == '斤' || c == '拷' || c == '烫' || c == '屯' || c == '閿' || c == '熸' || c == '垝' || c == '姹' || c == '夐' || c == '敓' || c == '缁' || c == '撳' || c == '伐' || c == '枻' || c == '鎷' || c == '峰' || c == '') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -154,26 +191,41 @@ public class MemberEndpoint implements CustomEndpoint {
     }
 
     /**
-     * 通过 uapis.cn 获取昵称（干净 UTF-8）；任何异常都降级为空字符串，交由上层继续兜底
+     * 通过 uapis.cn 获取 QQ 信息节点（干净 UTF-8）；任何异常都返回 null，交由上层继续兜底
      */
-    private String nicknameFromUapis(String qq) {
-        try {
-            URI uri = URI.create("https://uapis.cn/api/v1/social/qq/userinfo?qq="
-                + URLEncoder.encode(qq, StandardCharsets.UTF_8));
-            String body = httpGetString(uri, StandardCharsets.UTF_8);
-            if (body == null || body.isBlank()) {
-                return "";
-            }
-            JsonNode root = QQ_OBJECT_MAPPER.readTree(body);
-            String nickname = firstText(root, "nickname", "nick", "name", "userName");
-            if (nickname.isEmpty() && root.has("data") && root.get("data").isObject()) {
-                nickname = firstText(root.get("data"), "nickname", "nick", "name", "userName");
-            }
-            return nickname;
-        } catch (Exception e) {
-            log.debug("uapis.cn 获取 QQ 昵称失败, qq={}: {}", qq, e.getMessage());
-            return "";
+    private JsonNode uapisQqInfo(String qq, String token) throws Exception {
+        String url = "https://uapis.cn/api/v1/social/qq/userinfo?qq="
+            + URLEncoder.encode(qq, StandardCharsets.UTF_8);
+        if (token != null && !token.isBlank()) {
+            url += "&token=" + URLEncoder.encode(token.trim(), StandardCharsets.UTF_8);
         }
+        URI uri = URI.create(url);
+
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Accept", "*/*");
+
+        if (token != null && !token.isBlank()) {
+            builder.header("Authorization", "Bearer " + token.trim());
+        }
+
+        HttpRequest httpRequest = builder
+            .timeout(Duration.ofSeconds(8))
+            .GET()
+            .build();
+
+        HttpResponse<byte[]> response = QQ_HTTP_CLIENT.send(httpRequest,
+            HttpResponse.BodyHandlers.ofByteArray());
+        byte[] bytes = response.body();
+        if (bytes == null) {
+            return null;
+        }
+        String body = new String(bytes, StandardCharsets.UTF_8);
+        if (body.isBlank()) {
+            return null;
+        }
+        return QQ_OBJECT_MAPPER.readTree(body);
     }
 
     /**
@@ -186,10 +238,12 @@ public class MemberEndpoint implements CustomEndpoint {
             URI uri = URI.create(
                 "https://users.qzone.qq.com/fcg-bin/cgi_get_portrait.fcg?uins="
                     + URLEncoder.encode(qq, StandardCharsets.UTF_8));
-            String body = httpGetString(uri, Charset.forName("GBK"));
-            if (body == null || body.isBlank()) {
+            byte[] bytes = httpGetBytes(uri);
+            if (bytes == null || bytes.length == 0) {
                 return "";
             }
+            // 腾讯接口固定返回 GBK
+            String body = new String(bytes, Charset.forName("GBK"));
             int start = body.indexOf('(');
             int end = body.lastIndexOf(')');
             if (start < 0 || end <= start) {
@@ -207,9 +261,19 @@ public class MemberEndpoint implements CustomEndpoint {
         }
     }
 
-    /**
-     * 以指定字符集执行一次 GET 请求并返回响应文本
-     */
+    private static byte[] httpGetBytes(URI uri) throws Exception {
+        HttpRequest httpRequest = HttpRequest.newBuilder(uri)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Accept", "*/*")
+            .timeout(Duration.ofSeconds(8))
+            .GET()
+            .build();
+        HttpResponse<byte[]> response = QQ_HTTP_CLIENT.send(httpRequest,
+            HttpResponse.BodyHandlers.ofByteArray());
+        return response.body();
+    }
+
     private static String httpGetString(URI uri, Charset charset) throws Exception {
         HttpRequest httpRequest = HttpRequest.newBuilder(uri)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -337,5 +401,5 @@ public class MemberEndpoint implements CustomEndpoint {
     /**
      * QQ 信息代理响应
      */
-    public record QqInfoResponse(String qq, String nickname, String avatar, String email) {}
+    public record QqInfoResponse(String qq, String nickname, String avatar, String email, String region) {}
 }

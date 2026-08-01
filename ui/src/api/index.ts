@@ -164,33 +164,33 @@ export const membersBatchApiClient: MembersBatchApiClient = {
  * 发送验证码
  */
 export async function sendWithdrawVerificationCode(data: { email: string; qq: string }): Promise<any> {
-  return axiosInstance.post('/membersubmits/-/send-verification-code', data)
+  return axiosInstance.post('/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/send-verification-code', data)
 }
 
 /**
  * 提交撤回申请
  */
 export async function submitWithdrawRequest(data: { email: string; code: string; qq: string; reason?: string }): Promise<any> {
-  return axiosInstance.post('/membersubmits/-/withdraw', data)
+  return axiosInstance.post('/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/withdraw', data)
 }
 
 /**
  * 获取撤回申请列表（管理员）
  */
 export async function getWithdrawRequests(): Promise<any> {
-  return axiosInstance.get('/members/-/withdraw-requests')
+  return axiosInstance.get('/apis/console.api.member.plugin.halo.run/v1alpha1/members/-/withdraw-requests')
 }
 
 /**
  * 批准撤回申请（管理员）
  */
 export async function approveWithdraw(memberName: string): Promise<any> {
-  return axiosInstance.post(`/members/-/withdraw-approve/${memberName}`)
+  return axiosInstance.post(`/apis/console.api.member.plugin.halo.run/v1alpha1/members/-/withdraw-approve/${memberName}`)
 }
 
 /**
  * 拒绝撤回申请（管理员）
  */
 export async function rejectWithdraw(memberName: string): Promise<any> {
-  return axiosInstance.post(`/members/-/withdraw-reject/${memberName}`)
+  return axiosInstance.post(`/apis/console.api.member.plugin.halo.run/v1alpha1/members/-/withdraw-reject/${memberName}`)
 }

@@ -23,8 +23,25 @@ export default definePlugin({
         },
       },
     },
+    {
+      parentName: "Members",
+      route: {
+        path: "/members/submits",
+        name: "MemberSubmits",
+        component: () => import("@/views/MemberSubmitList.vue"),
+        meta: { permissions: ["plugin:members:view"], title: "申请记录" },
+      },
+    },
+    {
+      parentName: "Members",
+      route: {
+        path: "/members/withdrawals",
+        name: "MemberWithdrawals",
+        component: () => import("@/views/MemberWithdrawReview.vue"),
+        meta: { permissions: ["plugin:members:manage"], title: "撤回审核" },
+      },
+    },
   ],
   // 控制台导航入口
   extensionPoints: {},
-  i18n: {},
 });

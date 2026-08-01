@@ -33,6 +33,8 @@ public enum MemberConstant {
      */
     public static final String USER_MEMBER_WITHDRAW_REVIEW = "user-member-withdraw-review";
 
+    public static final String USER_MEMBER_WITHDRAW_CODE = "user-member-withdraw-code";
+
     /**
      * 最终保护器：用于标记成员撤回申请已处理
      */

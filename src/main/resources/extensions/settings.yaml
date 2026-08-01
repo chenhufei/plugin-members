@@ -97,6 +97,13 @@ spec:
           label: 启用安全黑名单
           help: 开启后会按下方 IP 和 User-Agent 关键字拒绝匿名提交请求
           value: false
+        - $formkit: text
+          id: uapisToken
+          name: uapisToken
+          key: uapisToken
+          label: Uapis 密钥 (Token)
+          help: 填写 Uapis 的 token 密钥，用于调用 uapis.cn 接口获取 QQ 昵称
+          value: ""
         - $formkit: textarea
           if: $get(enableSecurityBlocklist).value === true
           id: blockedIpList
@@ -121,14 +128,3 @@ spec:
           label: 拒绝空 User-Agent
           help: 默认关闭，避免误伤代理或特殊客户端
           value: false
-    - group: memberCardBackground
-      label: 卡片背景
-      formSchema:
-        - $formkit: text
-          id: memberCardBackground
-          name: memberCardBackground
-          key: memberCardBackground
-          label: 成员卡片背景图
-          help: 成员卡片的统一背景图片URL，留空则使用默认QQ主页背景图
-          value: ""
-          placeholder: "https://example.com/background.jpg"

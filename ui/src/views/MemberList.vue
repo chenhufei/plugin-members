@@ -14,7 +14,6 @@ import { useQuery } from "@tanstack/vue-query";
 import { computed, defineAsyncComponent, ref, shallowRef } from "vue";
 import { membersBatchApiClient, membersCoreApiClient } from "@/api";
 import FilterDropdown from "@/components/FilterDropdown.vue";
-import MemberWithdrawModal from "@/components/MemberWithdrawModal.vue";
 
 import type { Member } from "@/types";
 
@@ -75,6 +74,8 @@ const filteredGroups = computed(() => data.value || []);
       <IconTeam />
     </template>
     <template #actions>
+      <VButton size="sm" @click="$router.push('/members/submits')">申请记录</VButton>
+      <VButton size="sm" @click="$router.push('/members/withdrawals')">撤回审核</VButton>
       <VButton @click="handleRouteToFront" size="sm" ghost>
         <template #icon>
           <IconExternalLinkLine />

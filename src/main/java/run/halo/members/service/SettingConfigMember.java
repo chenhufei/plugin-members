@@ -27,6 +27,7 @@ public interface SettingConfigMember {
         private String blockedIpList;
         private String blockedUserAgentKeywords;
         private boolean rejectMissingUserAgent;
+        private String uapisToken;
 
         public int normalizedMaxRequestsPerMinute() {
             if (maxRequestsPerMinute == null || maxRequestsPerMinute < 1) {

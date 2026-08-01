@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.1.4'
+version '1.2.7'
 
 repositories {
     mavenCentral()
@@ -79,7 +79,8 @@ haloPlugin {
                 pathsToMatch = [
                     '/apis/member.plugin.halo.run/v1alpha1/members/**',
                     '/apis/member.plugin.halo.run/v1alpha1/membergroups/**',
-                    '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/**'
+                    '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/**',
+                    '/apis/console.api.member.plugin.halo.run/v1alpha1/**'
                 ]
             }
         }

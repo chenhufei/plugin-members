@@ -45,23 +45,9 @@ const { data, isLoading, refetch } = useQuery<{ items: WithdrawMember[] }>({
   refetchInterval: 30000, // 每30秒刷新
 });
 
-const withdrawRequests = ref<WithdrawMember[]>([]);
-
-// 监听数据变化
-const observeData = () => {
-  const interval = setInterval(() => {
-    const newData = queryClient.getQueryData<{ items: WithdrawMember[] }>(["plugin:members:withdraw-requests"]);
-    if (newData && newData.items.length !== withdrawRequests.value.length) {
-      withdrawRequests.value = newData.items || [];
-    }
-  }, 1000);
-  return () => clearInterval(interval);
-};
-
 // 手动刷新
 const handleRefresh = async () => {
   await refetch();
-  withdrawRequests.value = data.value?.items || [];
 };
 
 // 批准撤回
@@ -120,7 +106,6 @@ const handleReject = (member: WithdrawMember) => {
   });
 };
 
-observeData();
 </script>
 
 <template>
