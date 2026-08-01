@@ -36,9 +36,6 @@ public class VerificationCodeService {
         VerificationCodeEntry entry = new VerificationCodeEntry(code, Instant.now());
         codeStore.put(email, entry);
         
-        // 异步清理过期条目
-        scheduleCleanup(email);
-        
         log.info("验证码已生成并存储: email={}", email);
         return code;
     }
@@ -97,16 +94,8 @@ public class VerificationCodeService {
         return String.format("%06d", code);
     }
 
-    private void scheduleCleanup(String email) {
-        // 使用简单线程延迟清理，避免引入额外依赖
-        new Thread(() -> {
-            try {
-                Thread.sleep(CODE_EXPIRE_DURATION.toMillis() + 1000);
-                codeStore.remove(email);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }).start();
+    public void cleanup() {
+        codeStore.entrySet().removeIf(entry -> entry.getValue().isExpired());
     }
 
     /**

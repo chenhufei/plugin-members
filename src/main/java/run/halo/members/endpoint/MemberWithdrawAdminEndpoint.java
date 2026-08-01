@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,6 +27,9 @@ import run.halo.app.infra.ExternalLinkProcessor;
 import run.halo.app.notification.NotificationCenter;
 import run.halo.app.notification.NotificationReasonEmitter;
 import run.halo.app.notification.UserIdentity;
+import run.halo.app.plugin.ApiVersion;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import run.halo.members.Member;
 import run.halo.members.service.SettingConfigMember;
 import run.halo.members.finders.impl.MemberFinderImpl;
@@ -36,6 +40,8 @@ import static run.halo.members.MemberConstant.*;
  */
 @RestController
 @RequiredArgsConstructor
+@ApiVersion("console.api.member.plugin.halo.run/v1alpha1")
+@RequestMapping("/members")
 public class MemberWithdrawAdminEndpoint {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -51,53 +57,55 @@ public class MemberWithdrawAdminEndpoint {
      * 获取撤回申请列表
      */
     @GetMapping("/-/withdraw-requests")
-    public ResponseEntity<List<Map<String, Object>>> getWithdrawRequests() {
-        List<Member> allMembers = client.listAll(Member.class, null, null);
-        if (allMembers == null) {
-            return ResponseEntity.ok(Collections.emptyList());
-        }
-        
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Member member : allMembers) {
-            if (!"WITHDRAW_REQUESTED".equals(member.getSpec().getStatus())) {
-                continue;
+    public Mono<ResponseEntity<List<Map<String, Object>>>> getWithdrawRequests() {
+        return Mono.fromCallable(() -> {
+            List<Member> allMembers = client.listAll(Member.class, null, null);
+            if (allMembers == null) {
+                return ResponseEntity.ok(Collections.<Map<String, Object>>emptyList());
             }
-            Map<String, Object> item = new HashMap<>();
-            item.put("metadata", member.getMetadata());
-            item.put("spec", member.getSpec());
-            
-            if (member.getMetadata().getAnnotations() != null) {
-                item.put("withdrawReason", member.getMetadata().getAnnotations().get("member.plugin.halo.run/withdraw-reason"));
-                item.put("withdrawEmail", member.getMetadata().getAnnotations().get("member.plugin.halo.run/withdraw-email"));
-                item.put("statusBefore", member.getMetadata().getAnnotations().get("member.plugin.halo.run/status-before-withdraw"));
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (Member member : allMembers) {
+                if (!"WITHDRAW_REQUESTED".equals(member.getSpec().getStatus())) {
+                    continue;
+                }
+                Map<String, Object> item = new HashMap<>();
+                item.put("metadata", member.getMetadata());
+                item.put("spec", member.getSpec());
+                if (member.getMetadata().getAnnotations() != null) {
+                    item.put("withdrawReason", member.getMetadata().getAnnotations().get("member.plugin.halo.run/withdraw-reason"));
+                    item.put("withdrawEmail", member.getMetadata().getAnnotations().get("member.plugin.halo.run/withdraw-email"));
+                    item.put("statusBefore", member.getMetadata().getAnnotations().get("member.plugin.halo.run/status-before-withdraw"));
+                }
+                result.add(item);
             }
-            result.add(item);
-        }
-        return ResponseEntity.ok(result);
+            return ResponseEntity.ok(result);
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
      * 批准撤回申请
      */
     @PostMapping("/-/withdraw-approve/{memberName}")
-    public ResponseEntity<Map<String, Object>> approveWithdraw(@PathVariable String memberName) {
-        Optional<Member> opt = client.fetch(Member.class, memberName);
-        if (opt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        return doApproveReject(opt.get(), true, "APPROVED", "已通过");
+    public Mono<ResponseEntity<Map<String, Object>>> approveWithdraw(@PathVariable String memberName) {
+        return Mono.fromCallable(() -> {
+            Optional<Member> opt = client.fetch(Member.class, memberName);
+            return opt.<ResponseEntity<Map<String, Object>>>map(
+                member -> doApproveReject(member, true, "APPROVED", "已通过"))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
      * 拒绝撤回申请
      */
     @PostMapping("/-/withdraw-reject/{memberName}")
-    public ResponseEntity<Map<String, Object>> rejectWithdraw(@PathVariable String memberName) {
-        Optional<Member> opt = client.fetch(Member.class, memberName);
-        if (opt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        return doApproveReject(opt.get(), false, "REJECTED", "已拒绝");
+    public Mono<ResponseEntity<Map<String, Object>>> rejectWithdraw(@PathVariable String memberName) {
+        return Mono.fromCallable(() -> {
+            Optional<Member> opt = client.fetch(Member.class, memberName);
+            return opt.<ResponseEntity<Map<String, Object>>>map(
+                member -> doApproveReject(member, false, "REJECTED", "已拒绝"))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     private ResponseEntity<Map<String, Object>> doApproveReject(Member member, boolean approved, 

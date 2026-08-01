@@ -103,3 +103,87 @@ spec:
       type: string
       optional: true
       description: "拒绝理由"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-withdraw-code
+spec:
+  displayName: "成员撤回验证码"
+  description: "发送成员撤回申请验证码"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: code
+      type: string
+      description: "验证码"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: admin-member-withdraw
+spec:
+  displayName: "成员撤回申请通知管理员"
+  description: "成员提交撤回申请时通知管理员"
+  properties:
+    - name: adminEmail
+      type: string
+      description: "管理员邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: withdrawEmail
+      type: string
+      description: "撤回邮箱"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: withdrawReason
+      type: string
+      description: "撤回原因"
+    - name: statusBefore
+      type: string
+      description: "撤回前状态"
+    - name: reviewUrl
+      type: string
+      description: "审核链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-withdraw-review
+spec:
+  displayName: "成员撤回审核结果通知"
+  description: "管理员处理成员撤回申请后通知用户"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: reviewResult
+      type: string
+      description: "审核结果"
+    - name: reviewStatus
+      type: string
+      description: "审核状态"
+    - name: status
+      type: string
+      description: "成员状态"
+    - name: withdrawReason
+      type: string
+      description: "撤回原因"
+    - name: reviewUrl
+      type: string
+      description: "审核链接"

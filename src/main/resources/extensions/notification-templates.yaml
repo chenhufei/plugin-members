@@ -11,29 +11,55 @@ spec:
     rawBody: |
       有新的成员申请，请审核：
 
-      账号名称：${displayName}
-      邮箱：${email}
-      所属学校：${school}
-      QQ号：${qq}
-      分组：${groupName}
+      账号名称：${reason.attributes.displayName}
+      邮箱：${reason.attributes.email}
+      所属学校：${reason.attributes.school}
+      QQ号：${reason.attributes.qq}
+      分组：${reason.attributes.groupName}
 
     htmlBody: |
       <div class="content">
         <div class="head">
-          <p class="honorific">${subscriber.displayName} 你好：</p>
+          <p class="honorific" th:text="${subscriber.displayName + ' 你好：'}"></p>
         </div>
         <div class="body">
           <p>有新的成员申请，请审核：</p>
           <div class="summary">
-            <p>账号名称：${displayName}</p>
-            <p>邮箱：${email}</p>
-            <p>所属学校：${school}</p>
-            <p>QQ号：${qq}</p>
-            <p>分组：${groupName}</p>
+            <p th:text="${'账号名称：' + reason.attributes.displayName}"></p>
+            <p th:text="${'邮箱：' + reason.attributes.email}"></p>
+            <p th:text="${'所属学校：' + reason.attributes.school}"></p>
+            <p th:text="${'QQ号：' + reason.attributes.qq}"></p>
+            <p th:text="${'分组：' + reason.attributes.groupName}"></p>
           </div>
-          <p><a href="${reviewUrl}" target="_blank" rel="noopener noreferrer">前往查看</a></p>
+          <p><a th:href="${reason.attributes.reviewUrl}" target="_blank" rel="noopener noreferrer">前往查看</a></p>
         </div>
         <div></div>
+      </div>
+
+---
+apiVersion: notification.halo.run/v1alpha1
+kind: NotificationTemplate
+metadata:
+  name: template-user-member-withdraw-code
+spec:
+  reasonSelector:
+    reasonType: user-member-withdraw-code
+    language: default
+  template:
+    title: "您的成员撤回验证码"
+    rawBody: |
+      您的成员撤回验证码为：${reason.attributes.code}
+      验证码有效期为 5 分钟，请勿向他人透露。
+    htmlBody: |
+      <div class="content">
+        <div class="head">
+          <p class="honorific" th:text="${subscriber.displayName + ' 你好：'}"></p>
+        </div>
+        <div class="body">
+          <p>您的成员撤回验证码为：</p>
+          <p th:text="${reason.attributes.code}" style="font-size: 24px; font-weight: 700; letter-spacing: 4px;"></p>
+          <p>验证码有效期为 5 分钟，请勿向他人透露。</p>
+        </div>
       </div>
 ---
 apiVersion: notification.halo.run/v1alpha1
@@ -52,7 +78,7 @@ spec:
     htmlBody: |
       <div class="content">
         <div class="head">
-          <p class="honorific">${subscriber.displayName} 你好：</p>
+          <p class="honorific" th:text="${subscriber.displayName + ' 你好：'}"></p>
         </div>
         <div class="body">
           <div class="summary">
@@ -75,17 +101,17 @@ spec:
     rawBody: |
       您的成员申请已审核完成。
 
-      审核描述：${reviewDescription}
+      审核描述：${reason.attributes.reviewDescription}
 
     htmlBody: |
       <div class="content">
         <div class="head">
-          <p class="honorific">${subscriber.displayName} 你好：</p>
+          <p class="honorific" th:text="${subscriber.displayName + ' 你好：'}"></p>
         </div>
         <div class="body">
           <div class="summary">
             <p>您的成员申请已审核完成。</p>
-            <p th:if="${reviewDescription != null and reviewDescription != ''}">审核描述：${reviewDescription}</p>
+            <p th:if="${reason.attributes.reviewDescription != null and reason.attributes.reviewDescription != ''}" th:text="${'审核描述：' + reason.attributes.reviewDescription}"></p>
           </div>
         </div>
         <div></div>
@@ -104,16 +130,16 @@ spec:
     title: "您的成员申请未通过审核。"
     rawBody: |
       您的成员申请未通过审核。
-      拒绝理由：${reviewDescription}
+      拒绝理由：${reason.attributes.reviewDescription}
     htmlBody: |
       <div class="content">
         <div class="head">
-          <p class="honorific">${subscriber.displayName} 你好：</p>
+          <p class="honorific" th:text="${subscriber.displayName + ' 你好：'}"></p>
         </div>
         <div class="body">
           <div class="summary">
             <p>很抱歉地通知您，您的成员申请未通过审核。</p>
-            <p th:if="${reviewDescription != null and reviewDescription != ''}">拒绝理由：${reviewDescription}</p>
+            <p th:if="${reason.attributes.reviewDescription != null and reason.attributes.reviewDescription != ''}" th:text="${'拒绝理由：' + reason.attributes.reviewDescription}"></p>
           </div>
         </div>
         <div></div>
@@ -132,11 +158,11 @@ spec:
     title: "有新的成员撤回申请待处理"
     rawBody: |
       管理员您好，有用户提交了成员撤回申请：
-      申请成员：${displayName}
-      QQ号：${qq}
-      撤回邮箱：${withdrawEmail}
-      撤回原因：${withdrawReason}
-      当前状态：${statusBefore}
+      申请成员：${reason.attributes.displayName}
+      QQ号：${reason.attributes.qq}
+      撤回邮箱：${reason.attributes.withdrawEmail}
+      撤回原因：${reason.attributes.withdrawReason}
+      当前状态：${reason.attributes.statusBefore}
     htmlBody: |
       <div class="content">
         <div class="head">
@@ -146,11 +172,11 @@ spec:
           <div class="summary">
             <p>有用户提交了成员撤回申请，请及时处理：</p>
             <ul>
-              <li><strong>申请成员：</strong>${displayName}</li>
-              <li><strong>QQ号：</strong>${qq}</li>
-              <li><strong>撤回邮箱：</strong>${withdrawEmail}</li>
-              <li><strong>撤回原因：</strong>${withdrawReason}</li>
-              <li><strong>当前状态：</strong>${statusBefore}</li>
+              <li th:text="${'申请成员：' + reason.attributes.displayName}"></li>
+              <li th:text="${'QQ号：' + reason.attributes.qq}"></li>
+              <li th:text="${'撤回邮箱：' + reason.attributes.withdrawEmail}"></li>
+              <li th:text="${'撤回原因：' + reason.attributes.withdrawReason}"></li>
+              <li th:text="${'当前状态：' + reason.attributes.statusBefore}"></li>
             </ul>
           </div>
         </div>
@@ -169,19 +195,19 @@ spec:
   template:
     title: "您的撤回申请已处理完成"
     rawBody: |
-      您提交的成员撤回申请处理结果为：${reviewResult}
-      {{#if status}}当前状态：${status}{{/if}}
+      您提交的成员撤回申请处理结果为：${reason.attributes.reviewResult}
+      当前状态：${reason.attributes.status}
     htmlBody: |
       <div class="content">
         <div class="head">
-          <p class="honorific">${subscriber.displayName} 你好：</p>
+          <p class="honorific" th:text="${subscriber.displayName + ' 你好：'}"></p>
         </div>
         <div class="body">
           <div class="summary">
-            <p>您提交的成员撤回申请处理结果为：<strong>${reviewResult}</strong></p>
-            <p th:if="${status != null and status != ''}">当前状态：${status}</p>
-            <p th:if="${reviewResult == 'APPROVED'}">您的撤回申请已通过，申请已恢复为待审核状态。请等待管理员重新审核。</p>
-            <p th:if="${reviewResult == 'REJECTED'}">您的撤回申请未通过，您的申请状态保持不变。</p>
+            <p th:text="${'您提交的成员撤回申请处理结果为：' + reason.attributes.reviewResult}"></p>
+            <p th:if="${reason.attributes.status != null and reason.attributes.status != ''}" th:text="${'当前状态：' + reason.attributes.status}"></p>
+            <p th:if="${reason.attributes.reviewResult == 'APPROVED'}">您的撤回申请已通过，申请已恢复为待审核状态。请等待管理员重新审核。</p>
+            <p th:if="${reason.attributes.reviewResult == 'REJECTED'}">您的撤回申请未通过，您的申请状态保持不变。</p>
           </div>
         </div>
         <div></div>

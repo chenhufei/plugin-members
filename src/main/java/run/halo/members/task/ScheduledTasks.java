@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import run.halo.members.cache.CacheService;
 import run.halo.members.security.RateLimitService;
+import run.halo.members.cache.VerificationCodeService;
 
 /**
  * 定时任务
@@ -22,6 +23,7 @@ public class ScheduledTasks {
     
     private final CacheService cacheService;
     private final RateLimitService rateLimitService;
+    private final VerificationCodeService verificationCodeService;
     
     /**
      * 每5分钟清理一次过期缓存
@@ -43,6 +45,7 @@ public class ScheduledTasks {
     public void cleanupRateLimitRecords() {
         try {
             rateLimitService.cleanup();
+            verificationCodeService.cleanup();
             log.debug("定时清理频率限制记录完成");
         } catch (Exception e) {
             log.error("清理频率限制记录失败", e);
