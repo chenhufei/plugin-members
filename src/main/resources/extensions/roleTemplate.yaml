@@ -54,8 +54,11 @@ metadata:
     rbac.authorization.halo.run/display-name: "成员公开访问"
 rules:
   - apiGroups: [ "api.member.plugin.halo.run" ]
-    resources: [ "*" ]
-    verbs: [ "get", "create" ]
+    resources: [ "membergroups", "qq-info" ]
+    verbs: [ "get", "list" ]
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "membersubmits" ]
+    verbs: [ "create" ]
   # CustomEndpoint routes are also matched as non-resource URLs by Halo's security chain.
   - nonResourceURLs:
       - "/apis/api.member.plugin.halo.run/v1alpha1/membergroups"
