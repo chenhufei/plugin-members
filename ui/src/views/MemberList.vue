@@ -13,7 +13,7 @@ import {
 import { useQuery } from "@tanstack/vue-query";
 import { computed, defineAsyncComponent, ref, shallowRef } from "vue";
 import { membersBatchApiClient, membersCoreApiClient } from "@/api";
-import FilterDropdown from "@/components/FilterDropdown.vue";
+import ListFilterSelect from "@/components/ListFilterSelect.vue";
 
 import type { Member } from "@/types";
 
@@ -94,20 +94,22 @@ const filteredGroups = computed(() => data.value || []);
       </VSpace>
 
       <div class=":uno: flex items-center gap-2">
-        <FilterDropdown v-model="selectedStatusFilter" label="状态" :items="statusFilterOptions" />
-        <FilterDropdown v-model="selectedSortFilter" label="排序" :items="sortFilterOptions" />
+        <ListFilterSelect v-model="selectedStatusFilter" label="状态" :items="statusFilterOptions" />
+        <ListFilterSelect v-model="selectedSortFilter" label="排序" :items="sortFilterOptions" />
 
-        <button
+        <VButton
           v-tooltip="'刷新'"
-          type="button"
-          class=":uno: group cursor-pointer rounded p-1 hover:bg-gray-200"
+          size="sm"
+          ghost
           @click="refetch()"
         >
-          <IconRefreshLine
-            :class="{ ':uno: animate-spin text-gray-900': isFetching }"
-            class=":uno: h-4 w-4 text-gray-600 group-hover:text-gray-900"
-          />
-        </button>
+          <template #icon>
+            <IconRefreshLine
+              :class="{ ':uno: animate-spin': isFetching }"
+              class=":uno: h-4 w-4"
+            />
+          </template>
+        </VButton>
       </div>
     </div>
 

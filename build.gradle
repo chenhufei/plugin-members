@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.2.9'
+version '1.2.12'
 
 repositories {
     mavenCentral()
@@ -49,6 +49,11 @@ tasks.register('buildFrontend', PnpmTask) {
     dependsOn('installDepsForUI')
 }
 
+tasks.register('syncWidgetResources', Copy) {
+    from(layout.projectDirectory.dir('widget/src'))
+    into(layout.projectDirectory.dir('src/main/resources/static'))
+}
+
 tasks.register('typecheckFrontend', PnpmTask) {
     args = ['typecheck']
     dependsOn('installDepsForUI')
@@ -60,6 +65,10 @@ tasks.register('installDepsForUI', PnpmTask) {
 
 tasks.named('compileJava') {
     dependsOn('buildFrontend')
+}
+
+tasks.named('processResources') {
+    dependsOn('syncWidgetResources')
 }
 
 tasks.named('check') {

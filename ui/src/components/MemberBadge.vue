@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { Member } from "@/types";
 import { computed } from "vue";
-import { IconMore, VDropdown, VDropdownItem } from "@halo-dev/components";
+import { IconMore, VButton, VDropdown, VDropdownItem } from "@halo-dev/components";
 
 const props = defineProps<{
   selectMode?: boolean;
@@ -62,9 +62,35 @@ const isReviewed = computed(() => status.value === "APPROVED" || status.value ==
       >
         {{ displayName }}
       </span>
+      <div v-if="!selectMode" class=":uno: member-badge__actions">
+        <template v-if="isPending">
+          <VButton
+            v-tooltip="'通过审核'"
+            class=":uno: !h-6 !px-2 !text-[0.6875rem]"
+            size="sm"
+            type="secondary"
+            @click.stop="emit('approve')"
+          >通过</VButton>
+          <VButton
+            v-tooltip="'拒绝申请'"
+            class=":uno: !h-6 !px-2 !text-[0.6875rem]"
+            size="sm"
+            type="danger"
+            @click.stop="emit('reject')"
+          >拒绝</VButton>
+        </template>
+        <VDropdown v-else-if="isReviewed">
+          <VButton v-tooltip="'更多审核操作'" size="sm" ghost @click.stop>
+            <template #icon><IconMore class=":uno: h-3.5 w-3.5" /></template>
+          </VButton>
+          <template #popper>
+            <VDropdownItem @click="emit('revert')">撤回审核</VDropdownItem>
+          </template>
+        </VDropdown>
+      </div>
     </div>
 
-    <!-- 第二行：学校 + 操作按钮（右对齐） -->
+    <!-- 第二行：学校 -->
     <div class=":uno: member-badge__row2">
       <span
         class=":uno: member-badge__school"
@@ -72,22 +98,6 @@ const isReviewed = computed(() => status.value === "APPROVED" || status.value ==
       >
         {{ school }}
       </span>
-      <div v-if="!selectMode" class=":uno: member-badge__actions">
-      <template v-if="isPending">
-        <button class=":uno: member-badge__action-btn member-badge__action-btn--approve" @click.stop="emit('approve')">同意</button>
-        <button class=":uno: member-badge__action-btn member-badge__action-btn--reject" @click.stop="emit('reject')">拒绝</button>
-      </template>
-      <template v-else-if="isReviewed">
-        <VDropdown>
-          <button class=":uno: member-badge__action-btn member-badge__action-btn--more" type="button" @click.stop>
-            <IconMore class=":uno: h-3.5 w-3.5" />
-          </button>
-          <template #popper>
-            <VDropdownItem @click="emit('revert')">撤回审核</VDropdownItem>
-          </template>
-        </VDropdown>
-      </template>
-      </div>
     </div>
 
     <!-- 第三行：QQ + 状态 -->
@@ -154,6 +164,7 @@ const isReviewed = computed(() => status.value === "APPROVED" || status.value ==
 }
 .member-badge__title {
   display: block;
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -185,35 +196,10 @@ const isReviewed = computed(() => status.value === "APPROVED" || status.value ==
 }
 .member-badge__actions {
   display: flex;
+  margin-left: auto;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.25rem;
   flex: none;
-}
-.member-badge__action-btn {
-  display: inline-flex;
-  height: 1.25rem;
-  padding: 0 0.5rem;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 0.25rem;
-  font-size: 0.625rem;
-  font-weight: 500;
-  line-height: 1;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-}
-.member-badge__action-btn:hover {
-  opacity: 0.85;
-}
-.member-badge__action-btn--approve {
-  background: #07c160;
-  color: #fff;
-}
-.member-badge__action-btn--reject {
-  background: rgb(220 38 38);
-  color: #fff;
 }
 
 /* 第三行：QQ + 状态 */

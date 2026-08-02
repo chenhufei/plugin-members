@@ -57,7 +57,7 @@
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-qq">QQ 号 <span class="member-apply-widget-form-req">*</span></label>
               <div class="member-apply-widget-qq-row">
-                <input class="member-apply-widget-form-input" id="ma-qq" name="qq" type="text" required pattern="\d{5,12}" placeholder="5-12 位数字，填写后自动获取昵称" />
+                <input class="member-apply-widget-form-input" id="ma-qq" name="qq" type="text" required pattern="\\d{5,12}" placeholder="5-12 位数字，填写后自动获取昵称" />
                 <button type="button" class="member-apply-widget-btn-mini" id="ma-fetchQq" onclick="MemberApplyWidget.fetchQqInfo()">获取信息</button>
               </div>
               <div class="member-apply-widget-form-hint" id="ma-qqHint">填写 QQ 号后点击「获取信息」，自动填充昵称与默认邮箱。</div>
@@ -512,12 +512,12 @@
       setQqHint('请先填写有效的 QQ 号（5-12 位数字）。', 'error');
       return;
     }
-    
+
     // 调用获取QQ信息接口
     var btn = document.getElementById('ma-qqNicknameBtn');
     btn.disabled = true;
     btn.textContent = '获取中...';
-    
+
     fetch(API_BASE + '/qq-info?qq=' + encodeURIComponent(qq), {
       method: 'GET',
       credentials: 'same-origin',
@@ -531,7 +531,7 @@
       .then(function(res) {
         btn.disabled = false;
         btn.textContent = 'QQ昵称';
-        
+
         if (res.ok && res.data && res.data.nickname) {
           nameInput.value = res.data.nickname.trim();
           var schoolInput = document.getElementById('ma-school');
@@ -599,14 +599,14 @@
 
   function autoSelectGroup(qqData) {
     if (!groupSelect || !groupSelect.options || groupSelect.options.length === 0) return;
-    
+
     var region = null;
     var school = '';
     var name = '';
-    
+
     var schoolInput = document.getElementById('ma-school');
     if (schoolInput) school = schoolInput.value.trim();
-    
+
     var nameInput = document.getElementById('ma-displayName');
     if (nameInput) name = nameInput.value.trim();
 
@@ -616,7 +616,7 @@
         var option = groupSelect.options[i];
         var gName = (option.textContent || option.value).toLowerCase();
         if (gName === '加载中...' || gName === '暂无可申请的分组') continue;
-        
+
         if (school && (school.toLowerCase().indexOf(gName) !== -1 || gName.indexOf(school.toLowerCase()) !== -1)) {
           groupSelect.selectedIndex = i;
           setQqHint('已自动选择分组：' + option.textContent, 'success');
@@ -634,17 +634,17 @@
     if (qqData && qqData.region) {
       region = qqData.region;
     }
-    
+
     // 3. 从学校名称判断地区
     if (!region && school) {
       region = detectRegion(school);
     }
-    
+
     // 4. 从账号名称判断地区
     if (!region && name) {
       region = detectRegion(name);
     }
-    
+
     // 5. 如果检测到地区，自动选择对应的分组
     if (region) {
       if (selectGroupByRegion(region)) return;
@@ -660,7 +660,7 @@
         return;
       }
     }
-    
+
     // 兜底：如果没选上，默认选第一个
     if (groupSelect.selectedIndex === -1 && groupSelect.options.length > 0) {
       groupSelect.selectedIndex = 0;
@@ -672,14 +672,14 @@
   function setupSchoolListener() {
     var schoolInput = document.getElementById('ma-school');
     if (!schoolInput) return;
-    
+
     // 防抖，避免频繁触发
     var debounceTimer = null;
     schoolInput.addEventListener('input', function() {
       var value = this.value.trim();
       if (value === lastSchoolValue) return;
       lastSchoolValue = value;
-      
+
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(function() {
         if (value && value.length >= 2) {
@@ -708,7 +708,7 @@
       var groupName = option.textContent || option.value;
       groupName = groupName.toLowerCase();
       var regionLower = region.toLowerCase();
-      
+
       // 检查分组名是否包含地区名
       if (groupName.indexOf(regionLower) !== -1) {
         groupSelect.selectedIndex = i;
