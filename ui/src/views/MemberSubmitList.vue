@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { membersBatchApiClient, membersCoreApiClient } from "@/api";
 import MemberCheckModal from "@/components/MemberCheckModal.vue";
+import ListFilterSelect from "@/components/ListFilterSelect.vue";
 import { useMemberGroupFetch } from "@/composables/use-group-fetch";
 import { QK_MEMBERS } from "@/composables/use-member-fetch";
 import type { Member } from "@/types";
@@ -241,26 +242,27 @@ async function handleRevert(member: Member) {
           <VButton size="sm" @click="handleRejectInBatch">批量拒绝</VButton>
           <VButton size="sm" type="danger" @click="handleDeleteInBatch">删除</VButton>
         </template>
-        <input
+        <SearchInput
           v-else
           v-model="keyword"
-          type="text"
           placeholder="搜索成员申请..."
-          class=":uno: w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none md:w-64"
+          class=":uno: w-full md:w-64"
         />
       </VSpace>
 
       <div class=":uno: flex items-center gap-2">
         <FilterCleanButton v-if="hasFilters" @click="handleClearFilters" />
-        <FilterDropdown v-model="selectedStatus" label="状态" :items="statusOptions" />
-        <FilterDropdown v-model="selectedGroup" label="分组" :items="groupOptions" />
-        <FilterDropdown v-model="selectedSort" label="排序" :items="sortOptions" />
-        <button v-tooltip="'刷新'" type="button" class=":uno: group cursor-pointer rounded p-1 hover:bg-gray-200" @click="refetch()">
-          <IconRefreshLine
-            :class="{ ':uno: animate-spin text-gray-900': isFetching }"
-            class=":uno: h-4 w-4 text-gray-600 group-hover:text-gray-900"
-          />
-        </button>
+        <ListFilterSelect v-model="selectedStatus" label="状态" :items="statusOptions" />
+        <ListFilterSelect v-model="selectedGroup" label="分组" :items="groupOptions" />
+        <ListFilterSelect v-model="selectedSort" label="排序" :items="sortOptions" />
+        <VButton v-tooltip="'刷新'" size="sm" ghost @click="refetch()">
+          <template #icon>
+            <IconRefreshLine
+              :class="{ ':uno: animate-spin': isFetching }"
+              class=":uno: h-4 w-4"
+            />
+          </template>
+        </VButton>
       </div>
     </div>
 
@@ -339,38 +341,40 @@ async function handleRevert(member: Member) {
                   <VEntityField
                     v-if="!member.metadata.deletionTimestamp"
                     v-permission="['plugin:members:manage']"
-                    class=":uno: min-w-[200px]"
+                    class=":uno: min-w-[96px]"
                   >
                     <template #description>
-                      <VSpace spacing="xs" class=":uno: flex-wrap">
+                      <div class=":uno: flex justify-end">
                         <VButton
                           v-if="member.spec.status === 'PENDING'"
                           size="sm"
                           type="secondary"
                           @click="handleOpenCheckModal(member, 'APPROVED')"
-                        >同意</VButton>
-                        <VButton
-                          v-if="member.spec.status === 'PENDING'"
-                          size="sm"
-                          type="danger"
-                          @click="handleOpenCheckModal(member, 'REJECTED')"
-                        >拒绝</VButton>
+                        >审核</VButton>
                         <VButton
                           v-if="member.spec.status === 'APPROVED'"
                           size="sm"
                           type="default"
                           @click="handleRevert(member)"
-                        >撤回</VButton>
+                        >撤回审核</VButton>
                         <VButton
                           v-if="member.spec.status === 'REJECTED'"
                           size="sm"
                           type="default"
                           @click="handleRevert(member)"
                         >重新审核</VButton>
-                        <VButton size="sm" type="danger" @click="handleDelete(member)">删除</VButton>
-                      </VSpace>
+                      </div>
                     </template>
                   </VEntityField>
+                </template>
+                <template #dropdownItems>
+                  <VButton
+                    v-if="!member.metadata.deletionTimestamp"
+                    v-permission="['plugin:members:manage']"
+                    size="sm"
+                    type="danger"
+                    @click="handleDelete(member)"
+                  >删除</VButton>
                 </template>
               </VEntity>
             </tbody>

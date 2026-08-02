@@ -1,0 +1,15 @@
+:root {
+  --member-apply-widget-primary: var(--primary, #D13E43);
+  --member-apply-widget-primary-light: var(--primary-light, #E8686D);
+  --member-apply-widget-bg-primary: var(--bg-primary, #ffffff);
+  --member-apply-widget-bg-secondary: var(--bg-secondary, #f9fafb);
+  --member-apply-widget-text-primary: var(--text-primary, #111827);
+  --member-apply-widget-text-secondary: var(--text-secondary, #4b5563);
+  --member-apply-widget-text-tertiary: var(--text-tertiary, #9ca3af);
+  --member-apply-widget-border-color: var(--border-color, #e5e7eb);
+  --member-apply-widget-radius-sm: 6px;
+  --member-apply-widget-radius-md: 8px;
+  --member-apply-widget-radius-lg: 12px;
+  --member-apply-widget-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --member-apply-widget-transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}

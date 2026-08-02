@@ -194,21 +194,19 @@ public class MemberEndpoint implements CustomEndpoint {
      * 通过 uapis.cn 获取 QQ 信息节点（干净 UTF-8）；任何异常都返回 null，交由上层继续兜底
      */
     private JsonNode uapisQqInfo(String qq, String token) throws Exception {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        String normalizedToken = token.trim();
         String url = "https://uapis.cn/api/v1/social/qq/userinfo?qq="
             + URLEncoder.encode(qq, StandardCharsets.UTF_8);
-        if (token != null && !token.isBlank()) {
-            url += "&token=" + URLEncoder.encode(token.trim(), StandardCharsets.UTF_8);
-        }
         URI uri = URI.create(url);
 
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .header("Accept", "*/*");
-
-        if (token != null && !token.isBlank()) {
-            builder.header("Authorization", "Bearer " + token.trim());
-        }
+            .header("Accept", "*/*")
+            .header("Authorization", "Bearer " + normalizedToken);
 
         HttpRequest httpRequest = builder
             .timeout(Duration.ofSeconds(8))

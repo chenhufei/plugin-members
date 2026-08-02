@@ -5,8 +5,12 @@ import {
   Toast,
   VButton,
   VCard,
+  VEmpty,
+  VEntity,
+  VEntityContainer,
   VEntityField,
   VLoading,
+  VPageHeader,
   VSpace,
 } from "@halo-dev/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
@@ -16,6 +20,7 @@ import {
   approveWithdraw,
   rejectWithdraw,
 } from "@/api";
+import { formatDatetime } from "@/utils/date";
 
 interface WithdrawMember {
   metadata: {
@@ -109,71 +114,66 @@ const handleReject = (member: WithdrawMember) => {
 </script>
 
 <template>
-  <VCard>
-    <div class="flex items-center justify-between px-6 pt-6 pb-4">
-      <div>
-        <h3 class="text-lg font-medium">撤回申请审核</h3>
-        <p class="text-sm text-gray-500 mt-1">
-          用户提交的撤回申请将在此显示，管理员可进行审批操作
-        </p>
-      </div>
-      <VButton @click="handleRefresh" :loading="isLoading" ghost>
+  <VPageHeader title="撤回审核">
+    <template #actions>
+      <VButton v-tooltip="'刷新'" size="sm" :loading="isLoading" ghost @click="handleRefresh">
         <template #icon>
           <IconRefreshLine />
         </template>
-        刷新
       </VButton>
-    </div>
+    </template>
+  </VPageHeader>
 
+  <div class=":uno: p-4">
     <VLoading v-if="isLoading" />
 
-    <div v-else class="px-6 pb-6">
-      <div v-if="!data || !data.items || data.items.length === 0" class="text-center py-12 text-gray-400">
-        暂无撤回申请
-      </div>
+    <VEmpty
+      v-else-if="!data?.items?.length"
+      title="暂无撤回申请"
+      message="新的撤回申请会显示在这里"
+    />
 
-      <div v-else>
-        <div
-          v-for="item in data.items"
-          :key="item.metadata.name"
-          class="border rounded-lg p-4 mb-3 hover:bg-gray-50 transition-colors"
-        >
-          <div class="flex items-start justify-between">
-            <div class="flex-1">
-              <div class="flex items-center gap-3 mb-2">
-                <span class="font-medium text-base">{{ item.spec.displayName }}</span>
-                <span class="text-sm text-gray-500">@{{ item.spec.qq }}</span>
-              </div>
-              <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600">
-                <VEntityField :title="'邮箱'" :detail="item.spec.email" />
-                <VEntityField :title="''" :detail="item.spec.groupName || '未分组'" />
-                <VEntityField
-                  :title="''"
-                  :detail="item.metadata.creationTimestamp"
-                />
-              </div>
-            </div>
-
-            <VSpace>
-              <VButton
-                size="sm"
-                type="primary"
-                @click="handleApprove(item)"
-                :loading="approvingName === item.metadata.name"
-              >
-                批准
-              </VButton>
-              <VButton
-                size="sm"
-                @click="handleReject(item)"
-                :loading="rejectingName === item.metadata.name"
-              >
-                拒绝
-              </VButton>
-            </VSpace>
-          </div>
-        </div>
-      </div>
-    </div>
-  </VCard>
+    <VCard v-else :body-class="[':uno: !p-0']">
+      <VEntityContainer>
+        <VEntity v-for="item in data.items" :key="item.metadata.name">
+          <template #start>
+            <VEntityField
+              :title="item.spec.displayName"
+              :description="item.spec.qq ? `QQ: ${item.spec.qq}` : '未填写 QQ'"
+              class=":uno: min-w-[180px]"
+            />
+          </template>
+          <template #end>
+            <VEntityField class=":uno: min-w-[180px]">
+              <template #description>{{ item.spec.email || "未填写邮箱" }}</template>
+            </VEntityField>
+            <VEntityField class=":uno: min-w-[100px]">
+              <template #description>{{ item.spec.groupName || "未分组" }}</template>
+            </VEntityField>
+            <VEntityField class=":uno: min-w-[140px]">
+              <template #description>{{ formatDatetime(item.metadata.creationTimestamp) }}</template>
+            </VEntityField>
+            <VEntityField class=":uno: min-w-[132px]">
+              <template #description>
+                <VSpace spacing="xs" class=":uno: justify-end">
+                  <VButton
+                    size="sm"
+                    type="secondary"
+                    :loading="approvingName === item.metadata.name"
+                    @click="handleApprove(item)"
+                  >批准</VButton>
+                  <VButton
+                    size="sm"
+                    type="danger"
+                    :loading="rejectingName === item.metadata.name"
+                    @click="handleReject(item)"
+                  >拒绝</VButton>
+                </VSpace>
+              </template>
+            </VEntityField>
+          </template>
+        </VEntity>
+      </VEntityContainer>
+    </VCard>
+  </div>
 </template>

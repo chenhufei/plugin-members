@@ -19,12 +19,14 @@ export default definePlugin({
             name: "成员",
             group: "content",
             icon: markRaw(IconTeam),
+            priority: 30,
+            mobile: true,
           },
         },
       },
     },
     {
-      parentName: "Members",
+      parentName: "Root",
       route: {
         path: "/members/submits",
         name: "MemberSubmits",
@@ -33,7 +35,7 @@ export default definePlugin({
       },
     },
     {
-      parentName: "Members",
+      parentName: "Root",
       route: {
         path: "/members/withdrawals",
         name: "MemberWithdrawals",
