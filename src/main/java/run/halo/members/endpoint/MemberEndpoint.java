@@ -66,7 +66,7 @@ public class MemberEndpoint implements CustomEndpoint {
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
-        final var tag = "anonymous.member.plugin.halo.run/v1alpha1/Member";
+        final var tag = "api.member.plugin.halo.run/v1alpha1/Member";
         return route()
             .GET("membergroups", this::listGroups,
                 builder -> builder.operationId("ListMemberGroups")

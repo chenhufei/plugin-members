@@ -3,7 +3,7 @@
  * 使用方式: MemberApplyWidget.open()
  *
  * 依赖插件: PluginMembers
- * API 端点: /apis/anonymous.member.plugin.halo.run/v1alpha1
+ * API 端点: /apis/api.member.plugin.halo.run/v1alpha1
  */
 
 (function(window) {
@@ -14,13 +14,18 @@
   function parseJsonResponse(response) {
     return response.text().then(function(text) {
       var contentType = response.headers.get('content-type') || '';
+      var redirectedToLogin = response.redirected
+        && /\/login(?:[?#]|$)/.test(response.url || '');
       var data = null;
       try {
         data = text ? JSON.parse(text) : null;
       } catch (_) {
-        throw new Error(response.status === 302 || !contentType.toLowerCase().includes('json')
-          ? '成员接口未授权或插件版本未更新'
-          : '成员接口返回格式错误');
+        if (response.status === 302 || redirectedToLogin) {
+          throw new Error('成员公开接口未授权，请管理员在 Halo 控制台重新安装或升级成员插件');
+        }
+        throw new Error(!contentType.toLowerCase().includes('json')
+          ? '成员接口返回格式错误'
+          : '成员接口响应解析失败');
       }
       if (!response.ok) {
         throw new Error(data && (data.message || data.detail) || ('HTTP ' + response.status));
@@ -426,7 +431,7 @@
     }
 
     // 通过插件后端代理获取 QQ 昵称，规避浏览器直接请求第三方接口的跨域(CORS)与 403 限制。
-    // 后端端点: GET /apis/anonymous.member.plugin.halo.run/v1alpha1/qq-info?qq=
+    // 后端端点: GET /apis/api.member.plugin.halo.run/v1alpha1/qq-info?qq=
     // 归一化响应: { qq, nickname, avatar, email }
     var abortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var timeoutId = setTimeout(function() {
@@ -445,10 +450,8 @@
 
       fetch(url, fetchOpts)
         .then(function(res) {
-          return res.text().then(function(txt) {
-            var data = null;
-            try { data = txt ? JSON.parse(txt) : null; } catch (_) { data = { raw: txt }; }
-            return { ok: res.ok, status: res.status, data: data };
+          return parseJsonResponse(res).then(function(data) {
+            return { ok: true, data: data };
           });
         })
         .then(function(res) {
@@ -488,7 +491,7 @@
         })
         .catch(function(err) {
           try { clearTimeout(timeoutId); } catch (_) {}
-          cleanup(null, null, '获取信息失败（网络限制），请手动填写昵称。');
+          cleanup(null, null, (err && err.message ? err.message : '获取信息失败') + '，请手动填写昵称。');
         });
     } catch (e) {
       try { clearTimeout(timeoutId); } catch (_) {}
@@ -521,10 +524,8 @@
       cache: 'no-store'
     })
       .then(function(res) {
-        return res.text().then(function(txt) {
-          var data = null;
-          try { data = txt ? JSON.parse(txt) : null; } catch (_) { data = { raw: txt }; }
-          return { ok: res.ok, data: data };
+        return parseJsonResponse(res).then(function(data) {
+          return { ok: true, data: data };
         });
       })
       .then(function(res) {
@@ -551,7 +552,7 @@
       .catch(function(err) {
         btn.disabled = false;
         btn.textContent = 'QQ昵称';
-        setQqHint('获取昵称失败，请手动填写。', 'error');
+        setQqHint((err && err.message ? err.message : '获取昵称失败') + '，请手动填写。', 'error');
       });
   }
 
