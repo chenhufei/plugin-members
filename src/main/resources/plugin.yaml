@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   name: PluginMembers
 spec:
-  version: 1.2.18
+  version: 1.2.19
   requires: ">=2.23.0"
   author:
     name: chenhufei

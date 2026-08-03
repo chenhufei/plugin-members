@@ -1,4 +1,5 @@
 import { rsbuildConfig } from "@halo-dev/ui-plugin-bundler-kit";
+import { UnoCSSRspackPlugin } from "@unocss/webpack/rspack";
 
 const OUT_DIR_PROD = "../src/main/resources/console";
 const OUT_DIR_DEV = "../build/resources/main/console";
@@ -12,6 +13,11 @@ export default rsbuildConfig({
       output: {
         distPath: {
           root: outDir,
+        },
+      },
+      tools: {
+        rspack: {
+          plugins: [UnoCSSRspackPlugin()],
         },
       },
     };

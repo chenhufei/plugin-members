@@ -2,6 +2,7 @@ import { definePlugin } from "@halo-dev/ui-shared";
 import { IconTeam } from "@halo-dev/components";
 
 import { markRaw } from "vue";
+import "uno.css";
 
 export default definePlugin({
   components: {},

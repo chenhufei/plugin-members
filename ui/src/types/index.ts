@@ -85,6 +85,5 @@ export interface MemberFormState {
 export interface GroupFormState {
   displayName: string;
   description: string;
-  priority: number;
   annotations?: Record<string, string>;
 }

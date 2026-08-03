@@ -17,6 +17,9 @@ rules:
     resources: [ "plugins/members" ]
     resourceNames: [ "PluginMembers" ]
     verbs: [ "get", "list" ]
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "members" ]
+    verbs: [ "get", "list" ]
 ---
 apiVersion: v1alpha1
 kind: Role
@@ -38,6 +41,9 @@ rules:
   - apiGroups: [ "console.api.member.plugin.halo.run" ]
     resources: [ "members" ]
     verbs: [ "get", "list", "create" ]
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "members" ]
+    verbs: [ "create" ]
 
 ---
 

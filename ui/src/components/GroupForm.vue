@@ -60,12 +60,6 @@ async function onSubmit(data: GroupFormState) {
           label="描述"
           rows="3"
         />
-        <FormKit
-          type="number"
-          name="priority"
-          :value="formState?.priority"
-          label="优先级"
-        />
       </div>
     </div>
   </FormKit>

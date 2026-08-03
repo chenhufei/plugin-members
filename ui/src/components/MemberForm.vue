@@ -35,14 +35,11 @@ const data = ref<MemberFormState>({
 
 const qqNicknameLoading = shallowRef(false);
 const qrCodeProcessing = shallowRef(false);
-const userModified = ref({ displayName: false, email: false, avatar: false });
 const qrInput = useTemplateRef<HTMLInputElement>("qrInput");
 
 onMounted(() => {
   if (props.formState) {
     data.value = { ...toRaw(props.formState) };
-    // 编辑模式标记所有字段为已修改
-    userModified.value = { displayName: true, email: true, avatar: true };
   }
 });
 
@@ -62,13 +59,12 @@ async function handleFetchQQInfo() {
   qqNicknameLoading.value = true;
   try {
     const { data: qqInfo } = await fetchQqInfo(data.value.qq);
-    if (!userModified.value.avatar && qqInfo.avatar) data.value.avatar = qqInfo.avatar;
-    if (!userModified.value.email && qqInfo.email) data.value.email = qqInfo.email;
-    if (qqInfo.nickname && !userModified.value.displayName
-      && (!data.value.displayName || data.value.displayName.startsWith("QQ用户"))) {
+    if (qqInfo.avatar) data.value.avatar = qqInfo.avatar;
+    if (qqInfo.email) data.value.email = qqInfo.email;
+    if (qqInfo.nickname) {
       data.value.displayName = qqInfo.nickname;
       Toast.success(`已获取 QQ 昵称：${qqInfo.nickname}`);
-    } else if (!qqInfo.nickname) {
+    } else {
       Toast.success("已获取 QQ 头像和邮箱，该账号未返回昵称");
     }
   } finally {
@@ -151,7 +147,7 @@ async function onSubmit() {
           </VButton>
         </div>
 
-        <FormKit type="text" name="displayName" v-model="data.displayName" validation="required" label="账号名称" help="例如：清华大学表白墙" @input="() => userModified.displayName = true" />
+        <FormKit type="text" name="displayName" v-model="data.displayName" validation="required" label="账号名称" help="例如：清华大学表白墙" />
         <FormKit type="text" name="school" v-model="data.school" validation="required" label="所属学校" help="例如：清华大学" />
         <FormKit type="text" name="qqFriendLink" v-model="data.qqFriendLink" label="QQ加好友链接" help="可通过上传二维码自动获取" />
         <div class=":uno: py-2">
@@ -161,8 +157,8 @@ async function onSubmit() {
           </VButton>
         </div>
 
-        <FormKit type="email" name="email" v-model="data.email" label="邮箱" help="用于审核通知" @input="() => userModified.email = true" />
-        <FormKit type="attachment" name="avatar" v-model="data.avatar" label="头像" @input="() => userModified.avatar = true" />
+        <FormKit type="email" name="email" v-model="data.email" label="邮箱" help="用于审核通知" />
+        <FormKit type="attachment" name="avatar" v-model="data.avatar" label="头像" />
         <FormKit type="attachment" name="background" v-model="data.background" label="背景图" help="成员卡片背景图片" />
         <FormKit type="select" name="groupName" v-model="data.groupName" label="所属分组"
           :options="[
