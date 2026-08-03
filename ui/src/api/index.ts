@@ -1,5 +1,5 @@
 import { axiosInstance } from "@halo-dev/api-client";
-import type { Member, MemberGroup } from "@/types";
+import type { CronMemberSubmit, Member, MemberGroup } from "@/types";
 
 const baseURL = "/apis/member.plugin.halo.run/v1alpha1";
 const batchBaseURL = "/apis/api.member.plugin.halo.run/v1alpha1";
@@ -30,6 +30,18 @@ export interface BatchOperationResult {
   message: string;
 }
 
+export interface QqInfo {
+  qq: string;
+  nickname: string;
+  avatar: string;
+  email: string;
+  region: string;
+}
+
+export function fetchQqInfo(qq: string): ApiResponse<QqInfo> {
+  return axiosInstance.get(`${batchBaseURL}/qq-info`, { params: { qq } });
+}
+
 interface MembersCoreApiClient {
   member: {
     list: (params?: { page?: number; size?: number }) => ApiResponse<ListResult<Member>>;
@@ -46,6 +58,11 @@ interface MembersCoreApiClient {
     update: (name: string, group: unknown) => ApiResponse<MemberGroup>;
     patch: (name: string, patch: unknown[]) => ApiResponse<MemberGroup>;
     delete: (name: string) => ApiResponse<unknown>;
+  };
+  cronMemberSubmit: {
+    list: (params?: { page?: number; size?: number }) => ApiResponse<ListResult<CronMemberSubmit>>;
+    create: (task: CronMemberSubmit) => ApiResponse<CronMemberSubmit>;
+    update: (name: string, task: CronMemberSubmit) => ApiResponse<CronMemberSubmit>;
   };
 }
 
@@ -113,6 +130,17 @@ export const membersCoreApiClient: MembersCoreApiClient = {
     },
     delete: (name: string) => {
       return axiosInstance.delete(`${baseURL}/membergroups/${name}`);
+    },
+  },
+  cronMemberSubmit: {
+    list: (params?: { page?: number; size?: number }) => {
+      return axiosInstance.get(`${baseURL}/cronmembersubmits`, { params });
+    },
+    create: (task: CronMemberSubmit) => {
+      return axiosInstance.post(`${baseURL}/cronmembersubmits`, task);
+    },
+    update: (name: string, task: CronMemberSubmit) => {
+      return axiosInstance.put(`${baseURL}/cronmembersubmits/${name}`, task);
     },
   },
 };

@@ -13,8 +13,6 @@ public interface SettingConfigMember {
 
     @Data
     class BasicConfig {
-        public static final String GROUP = "basic";
-
         private boolean autoApprove;
         private boolean autoApproveWithdraw;
         private boolean sendEmail;
@@ -35,5 +33,50 @@ public interface SettingConfigMember {
             }
             return Math.min(maxRequestsPerMinute, 1000);
         }
+    }
+
+    @Data
+    class BasicGroupConfig {
+        public static final String GROUP = "basic";
+
+        private boolean autoApprove;
+        private boolean autoApproveWithdraw;
+        private String defaultGroupName;
+        private String[] forbidSelectedGroupName = new String[0];
+
+        // 旧版所有配置都保存在 basic，保留这些字段用于无损迁移。
+        private boolean sendEmail;
+        private String adminEmail;
+        private boolean enableRateLimit = true;
+        private Integer maxRequestsPerMinute = 10;
+        private boolean enableSecurityBlocklist;
+        private String blockedIpList;
+        private String blockedUserAgentKeywords;
+        private boolean rejectMissingUserAgent;
+        private String uapisToken;
+    }
+
+    @Data
+    class NotificationGroupConfig {
+        public static final String GROUP = "notification";
+        private boolean sendEmail;
+        private String adminEmail = "";
+    }
+
+    @Data
+    class SecurityGroupConfig {
+        public static final String GROUP = "security";
+        private boolean enableRateLimit = true;
+        private Integer maxRequestsPerMinute = 10;
+        private boolean enableSecurityBlocklist;
+        private String blockedIpList = "";
+        private String blockedUserAgentKeywords = "";
+        private boolean rejectMissingUserAgent;
+    }
+
+    @Data
+    class IntegrationGroupConfig {
+        public static final String GROUP = "integration";
+        private String uapisToken = "";
     }
 }

@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.time.Instant;
 import java.time.Duration;
 
 import org.apache.commons.lang3.StringUtils;
@@ -69,7 +70,13 @@ public class MemberWithdrawEndpoint {
         }
 
         return Mono.fromCallable(() -> {
-            List<Member> members = client.listAll(Member.class, null, null);
+            var config = settingConfigMember.getBasicConfig().block();
+            if (config == null || !config.isSendEmail()) {
+                return errorResponse("邮件通知未开启，暂时无法发送撤回验证码");
+            }
+            List<Member> members = client.listAll(Member.class,
+                new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort());
             Optional<Member> found = members.stream()
                 .filter(m -> qq.equals(m.getSpec().getQq())
                     && StringUtils.equalsIgnoreCase(email, m.getSpec().getEmail()))
@@ -115,7 +122,9 @@ public class MemberWithdrawEndpoint {
                 return errorResponse("验证码错误，请重新输入");
             }
 
-            List<Member> members = client.listAll(Member.class, null, null);
+            List<Member> members = client.listAll(Member.class,
+                new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort());
             Optional<Member> found = members.stream()
                 .filter(m -> qq.equals(m.getSpec().getQq())
                     && StringUtils.equalsIgnoreCase(email, m.getSpec().getEmail()))
@@ -130,9 +139,11 @@ public class MemberWithdrawEndpoint {
             String userEmail = member.getSpec().getEmail();
             String displayName = member.getSpec().getDisplayName();
             Map<String, String> annotations = MetadataUtil.nullSafeAnnotations(member);
-            annotations.put("member.plugin.halo.run/status-before-withdraw", statusBefore);
-            annotations.put("member.plugin.halo.run/withdraw-email", userEmail);
-            annotations.put("member.plugin.halo.run/withdraw-reason", reason != null ? reason : "");
+            annotations.put(WITHDRAW_STATUS_BEFORE, statusBefore);
+            annotations.put(WITHDRAW_EMAIL, userEmail);
+            annotations.put(WITHDRAW_REASON, reason != null ? reason : "");
+            annotations.remove(WITHDRAW_REVIEW_ACTION);
+            annotations.remove(WITHDRAW_REVIEWED_AT);
 
             member.getSpec().setStatus("WITHDRAW_REQUESTED");
             client.update(member);
@@ -141,21 +152,30 @@ public class MemberWithdrawEndpoint {
             SettingConfigMember.BasicConfig config = settingConfigMember.getBasicConfig().block();
             if (config != null && config.isAutoApproveWithdraw()) {
                 String adminEmail = config.getAdminEmail();
-                member.getSpec().setStatus(statusBefore);
-                annotations.remove("member.plugin.halo.run/withdraw-review-action");
-                annotations.remove("member.plugin.halo.run/withdraw-reviewed-at");
-                annotations.remove("member.plugin.halo.run/status-before-withdraw");
-                annotations.remove("member.plugin.halo.run/withdraw-email");
-                annotations.remove("member.plugin.halo.run/withdraw-reason");
+                String reviewedAt = Instant.now().toString();
+                String withdrawReason = StringUtils.defaultIfBlank(reason, "成员主动撤回");
+                member.getSpec().setStatus("REJECTED");
+                annotations.put(WITHDRAW_REVIEW_ACTION, "APPROVED");
+                annotations.put(WITHDRAW_REVIEWED_AT, reviewedAt);
+                annotations.put(REVIEW_ACTION, REVIEW_ACTION_WITHDRAW);
+                annotations.put(REVIEW_DESCRIPTION, withdrawReason);
+                annotations.put(OFFLINE_AT, reviewedAt);
+                annotations.put(OFFLINE_REASON, withdrawReason);
+                annotations.put(OFFLINE_SOURCE, "SELF_WITHDRAW");
                 client.update(member);
                 memberFinder.evictCache();
-                publishWithdrawReviewNotice(member, email, displayName, adminEmail,
-                    "APPROVED", "已通过", statusBefore, reason != null ? reason : "");
-                return successResponse("撤回申请已自动通过，成员状态已恢复为" + statusBefore);
+                if (config.isSendEmail()) {
+                    publishWithdrawReviewNotice(member, email, displayName, adminEmail,
+                        "APPROVED", "已通过", "已下架", reason != null ? reason : "");
+                }
+                return successResponse("撤回申请已自动通过，成员已下架");
             }
 
-            publishWithdrawNotice(member, email, statusBefore, reason != null ? reason : "");
-            return successResponse("撤回申请已提交，管理员审核后将通过邮件通知您");
+            if (config != null && config.isSendEmail()) {
+                publishWithdrawNotice(member, email, statusBefore, reason != null ? reason : "");
+                return successResponse("撤回申请已提交，管理员审核后将通过邮件通知您");
+            }
+            return successResponse("撤回申请已提交，请等待管理员审核");
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -188,7 +208,7 @@ public class MemberWithdrawEndpoint {
         attrs.put("code", code);
         var interestReason = new run.halo.app.core.extension.notification.Subscription.InterestReason();
         interestReason.setReasonType(USER_MEMBER_WITHDRAW_CODE);
-        interestReason.setExpression("props.email == '%s'".formatted(email));
+        interestReason.setExpression("props.email == '%s'".formatted(escapeExpressionValue(email)));
         var subscriber = new run.halo.app.core.extension.notification.Subscription.Subscriber();
         subscriber.setName(UserIdentity.anonymousWithEmail(email).name());
         notificationCenter.subscribe(subscriber, interestReason).block();
@@ -202,14 +222,14 @@ public class MemberWithdrawEndpoint {
     private void publishWithdrawNotice(Member member, String email, String statusBefore,
         String withdrawReason) {
         SettingConfigMember.BasicConfig config = settingConfigMember.getBasicConfig().block();
-        if (config == null || StringUtils.isEmpty(config.getAdminEmail())) {
+        if (config == null || !config.isSendEmail() || StringUtils.isEmpty(config.getAdminEmail())) {
             return;
         }
 
         String adminEmail = config.getAdminEmail();
         var spec = member.getSpec();
         
-        String url = externalLinkProcessor.processLink("/members");
+        String url = externalLinkProcessor.processLink("/console/members");
         var reasonSubject = Reason.Subject.builder()
             .apiVersion(member.getApiVersion())
             .kind(member.getKind())
@@ -230,7 +250,7 @@ public class MemberWithdrawEndpoint {
         // 注册订阅：让 plugin-mail-template 能匹配到这个 reason
         var interestReason = new run.halo.app.core.extension.notification.Subscription.InterestReason();
         interestReason.setReasonType(ADMIN_MEMBER_WITHDRAW);
-        interestReason.setExpression("props.adminEmail == '%s'".formatted(adminEmail));
+        interestReason.setExpression("props.adminEmail == '%s'".formatted(escapeExpressionValue(adminEmail)));
         var subscriber = new run.halo.app.core.extension.notification.Subscription.Subscriber();
         subscriber.setName(UserIdentity.anonymousWithEmail(adminEmail).name());
         notificationCenter.subscribe(subscriber, interestReason).block();
@@ -244,7 +264,11 @@ public class MemberWithdrawEndpoint {
 
     private void publishWithdrawReviewNotice(Member member, String email, String displayName, 
             String adminEmail, String reviewResult, String reviewStatus, String statusBefore, String withdrawReason) {
-        
+        var config = settingConfigMember.getBasicConfig().block();
+        if (config == null || !config.isSendEmail() || StringUtils.isEmpty(email)) {
+            return;
+        }
+
         String url = externalLinkProcessor.processLink("/members");
         var reasonSubject = Reason.Subject.builder()
             .apiVersion(member.getApiVersion())
@@ -267,7 +291,7 @@ public class MemberWithdrawEndpoint {
         // 注册订阅：让 plugin-mail-template 能匹配到这个 reason
         var interestReason = new run.halo.app.core.extension.notification.Subscription.InterestReason();
         interestReason.setReasonType(USER_MEMBER_WITHDRAW_REVIEW);
-        interestReason.setExpression("props.email == '%s'".formatted(email));
+        interestReason.setExpression("props.email == '%s'".formatted(escapeExpressionValue(email)));
         var subscriber = new run.halo.app.core.extension.notification.Subscription.Subscriber();
         subscriber.setName(UserIdentity.anonymousWithEmail(email).name());
         notificationCenter.subscribe(subscriber, interestReason).block();
@@ -277,6 +301,10 @@ public class MemberWithdrawEndpoint {
                 .author(UserIdentity.anonymousWithEmail(email))
                 .subject(reasonSubject)
             ).block();
+    }
+
+    private String escapeExpressionValue(String value) {
+        return value.replace("'", "''");
     }
 
     /**

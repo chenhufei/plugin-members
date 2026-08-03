@@ -5,48 +5,28 @@ metadata:
 spec:
   forms:
     - group: basic
-      label: 基础设置
+      label: 申请审核
       formSchema:
         - $formkit: switch
           name: autoApprove
           id: autoApprove
           key: autoApprove
-          label: 开启自动审核
-          help: 新成员申请后自动审核通过，无需管理员手动审核
+          label: 自动通过申请
+          help: 新成员申请提交后直接通过，适合无需人工审核的站点
           value: false
         - $formkit: switch
           name: autoApproveWithdraw
           id: autoApproveWithdraw
           key: autoApproveWithdraw
-          label: 自动审核撤回申请
-          help: 用户提交的撤回申请自动通过，无需管理员手动审核
+          label: 自动通过撤回
+          help: 用户提交撤回申请后直接处理，无需管理员手动审核
           value: false
-        - $formkit: radio
-          name: sendEmail
-          id: sendEmail
-          key: sendEmail
-          label: 是否发送邮件通知
-          value: false
-          options:
-            - value: true
-              label: 开启
-            - value: false
-              label: 关闭
-        - $formkit: text
-          if: $get(sendEmail).value === true
-          id: adminEmail
-          name: adminEmail
-          key: adminEmail
-          value: ""
-          label: 管理员邮箱
-          help: 管理员邮箱，用于接收邮件通知
-          validation: required|email
         - $formkit: select
           id: defaultGroupName
           name: defaultGroupName
           key: defaultGroupName
           label: 默认成员分组
-          help: 新成员申请时如果未选择分组，将自动归入此分组
+          help: 申请未选择分组时自动归入该分组
           clearable: true
           action: /apis/member.plugin.halo.run/v1alpha1/membergroups
           requestOption:
@@ -73,13 +53,37 @@ spec:
             itemsField: items
             labelField: spec.displayName
             valueField: metadata.name
-          help: 成员申请页面中禁止显示的分组，用户无法申请加入这些分组
+          help: 这些分组不会出现在前台成员申请表中
+
+    - group: notification
+      label: 邮件通知
+      formSchema:
+        - $formkit: switch
+          name: sendEmail
+          id: sendEmail
+          key: sendEmail
+          label: 发送邮件通知
+          help: 向管理员和申请人发送提交、通过、拒绝、下架与撤回结果
+          value: false
+        - $formkit: text
+          if: $get(sendEmail).value === true
+          id: adminEmail
+          name: adminEmail
+          key: adminEmail
+          value: ""
+          label: 管理员邮箱
+          help: 用于接收新申请和撤回申请提醒
+          validation: required|email
+
+    - group: security
+      label: 安全防护
+      formSchema:
         - $formkit: switch
           id: enableRateLimit
           name: enableRateLimit
           key: enableRateLimit
           label: 启用提交限流
-          help: 开启后会按客户端 IP 限制匿名提交频率，降低刷表和误操作风险
+          help: 按客户端 IP 限制匿名提交频率，降低刷表和误操作风险
           value: true
         - $formkit: number
           if: $get(enableRateLimit).value === true
@@ -95,15 +99,8 @@ spec:
           name: enableSecurityBlocklist
           key: enableSecurityBlocklist
           label: 启用安全黑名单
-          help: 开启后会按下方 IP 和 User-Agent 关键字拒绝匿名提交请求
+          help: 按 IP 和 User-Agent 关键字拒绝匿名提交请求
           value: false
-        - $formkit: text
-          id: uapisToken
-          name: uapisToken
-          key: uapisToken
-          label: Uapis 密钥 (Token)
-          help: 填写 Uapis 的 token 密钥，用于调用 uapis.cn 接口获取 QQ 昵称
-          value: ""
         - $formkit: textarea
           if: $get(enableSecurityBlocklist).value === true
           id: blockedIpList
@@ -128,3 +125,14 @@ spec:
           label: 拒绝空 User-Agent
           help: 默认关闭，避免误伤代理或特殊客户端
           value: false
+
+    - group: integration
+      label: QQ 信息
+      formSchema:
+        - $formkit: password
+          id: uapisToken
+          name: uapisToken
+          key: uapisToken
+          label: Uapis 密钥
+          help: 用于通过 uapis.cn 获取 QQ 昵称；留空时使用无需密钥的降级接口
+          value: ""

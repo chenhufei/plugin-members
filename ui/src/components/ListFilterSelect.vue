@@ -54,9 +54,11 @@ const options = computed(() =>
 }
 
 .list-filter-select :deep(.formkit-label) {
-  margin-bottom: 0.25rem;
-  color: rgb(107 114 128);
-  font-size: 0.75rem;
-  line-height: 1rem;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 </style>

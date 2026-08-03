@@ -2,10 +2,12 @@ package run.halo.members.endpoint;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.time.Instant;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.ResponseEntity;
@@ -15,10 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.RequiredArgsConstructor;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.type.TypeFactory;
 
 import run.halo.app.core.extension.notification.Reason;
 import run.halo.app.extension.ExtensionClient;
@@ -44,8 +43,6 @@ import static run.halo.members.MemberConstant.*;
 @RequestMapping("/members")
 public class MemberWithdrawAdminEndpoint {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     private final ExtensionClient client;
     private final SettingConfigMember settingConfigMember;
     private final MemberFinderImpl memberFinder;
@@ -57,29 +54,75 @@ public class MemberWithdrawAdminEndpoint {
      * 获取撤回申请列表
      */
     @GetMapping("/-/withdraw-requests")
-    public Mono<ResponseEntity<List<Map<String, Object>>>> getWithdrawRequests() {
+    public Mono<ResponseEntity<Map<String, Object>>> getWithdrawRequests() {
         return Mono.fromCallable(() -> {
-            List<Member> allMembers = client.listAll(Member.class, null, null);
+            List<Member> allMembers = client.listAll(Member.class,
+                new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort());
             if (allMembers == null) {
-                return ResponseEntity.ok(Collections.<Map<String, Object>>emptyList());
+                return ResponseEntity.ok(Map.of(
+                    "items", Collections.emptyList(),
+                    "total", 0
+                ));
             }
             List<Map<String, Object>> result = new ArrayList<>();
             for (Member member : allMembers) {
-                if (!"WITHDRAW_REQUESTED".equals(member.getSpec().getStatus())) {
+                Map<String, String> annotations = MetadataUtil.nullSafeAnnotations(member);
+                String status = member.getSpec().getStatus();
+                boolean pendingWithdraw = "WITHDRAW_REQUESTED".equals(status);
+                boolean reviewedWithdraw = StringUtils.isNotBlank(
+                    annotations.get(WITHDRAW_REVIEWED_AT));
+                boolean hasOfflineRecord = StringUtils.isNotBlank(annotations.get(OFFLINE_AT));
+                if (!pendingWithdraw && !reviewedWithdraw && !hasOfflineRecord) {
                     continue;
                 }
                 Map<String, Object> item = new HashMap<>();
                 item.put("metadata", member.getMetadata());
                 item.put("spec", member.getSpec());
-                if (member.getMetadata().getAnnotations() != null) {
-                    item.put("withdrawReason", member.getMetadata().getAnnotations().get("member.plugin.halo.run/withdraw-reason"));
-                    item.put("withdrawEmail", member.getMetadata().getAnnotations().get("member.plugin.halo.run/withdraw-email"));
-                    item.put("statusBefore", member.getMetadata().getAnnotations().get("member.plugin.halo.run/status-before-withdraw"));
+
+                if (pendingWithdraw || reviewedWithdraw) {
+                    item.put("recordType", "SELF_WITHDRAW");
+                    item.put("recordStatus", pendingWithdraw
+                        ? "PENDING"
+                        : annotations.getOrDefault(WITHDRAW_REVIEW_ACTION, "APPROVED"));
+                    item.put("reason", annotations.getOrDefault(WITHDRAW_REASON, ""));
+                    item.put("email", annotations.getOrDefault(WITHDRAW_EMAIL,
+                        StringUtils.defaultString(member.getSpec().getEmail())));
+                    item.put("statusBefore",
+                        annotations.getOrDefault(WITHDRAW_STATUS_BEFORE, "PENDING"));
+                    item.put("recordedAt", pendingWithdraw
+                        ? creationTimestamp(member)
+                        : annotations.getOrDefault(WITHDRAW_REVIEWED_AT,
+                            creationTimestamp(member)));
+                } else {
+                    item.put("recordType", "ADMIN_OFFLINE");
+                    item.put("recordStatus", "APPROVED".equals(status)
+                        ? "RESTORED"
+                        : "OFFLINE");
+                    item.put("reason", annotations.getOrDefault(OFFLINE_REASON,
+                        annotations.getOrDefault(REVIEW_DESCRIPTION, "")));
+                    item.put("email", StringUtils.defaultString(member.getSpec().getEmail()));
+                    item.put("statusBefore", "APPROVED");
+                    item.put("recordedAt", annotations.getOrDefault(OFFLINE_AT,
+                        creationTimestamp(member)));
                 }
                 result.add(item);
             }
-            return ResponseEntity.ok(result);
+            result.sort(Comparator.comparing(
+                item -> String.valueOf(item.getOrDefault("recordedAt", "")),
+                Comparator.reverseOrder()
+            ));
+            return ResponseEntity.ok(Map.of(
+                "items", result,
+                "total", result.size()
+            ));
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private static String creationTimestamp(Member member) {
+        return Optional.ofNullable(member.getMetadata().getCreationTimestamp())
+            .map(Object::toString)
+            .orElse("");
     }
 
     /**
@@ -110,35 +153,55 @@ public class MemberWithdrawAdminEndpoint {
 
     private ResponseEntity<Map<String, Object>> doApproveReject(Member member, boolean approved, 
             String reviewResult, String reviewStatus) {
+        if (!"WITHDRAW_REQUESTED".equals(member.getSpec().getStatus())) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "failed", true,
+                "message", "该撤回申请已处理，请刷新列表"
+            ));
+        }
         String statusBefore = "PENDING";
         Map<String, String> annotations = MetadataUtil.nullSafeAnnotations(member);
-        if (annotations.containsKey("member.plugin.halo.run/status-before-withdraw")) {
-            statusBefore = annotations.get("member.plugin.halo.run/status-before-withdraw");
+        if (annotations.containsKey(WITHDRAW_STATUS_BEFORE)) {
+            statusBefore = annotations.get(WITHDRAW_STATUS_BEFORE);
         }
         
         String email = member.getSpec().getEmail();
         String displayName = member.getSpec().getDisplayName();
-        String withdrawReason = annotations.getOrDefault("member.plugin.halo.run/withdraw-reason", "");
-        String adminEmail = settingConfigMember.getBasicConfig().block().getAdminEmail();
+        String withdrawReason = annotations.getOrDefault(WITHDRAW_REASON, "");
+        var config = settingConfigMember.getBasicConfig().block();
+        String adminEmail = config == null ? "" : StringUtils.defaultString(config.getAdminEmail());
+        String reviewedAt = Instant.now().toString();
 
-        // 恢复原始状态
-        member.getSpec().setStatus(statusBefore);
-        annotations.remove("member.plugin.halo.run/withdraw-review-action");
-        annotations.remove("member.plugin.halo.run/withdraw-reviewed-at");
-        annotations.remove("member.plugin.halo.run/status-before-withdraw");
-        annotations.remove("member.plugin.halo.run/withdraw-email");
-        annotations.remove("member.plugin.halo.run/withdraw-reason");
+        annotations.put(WITHDRAW_REVIEW_ACTION, reviewResult);
+        annotations.put(WITHDRAW_REVIEWED_AT, reviewedAt);
+        if (approved) {
+            String reason = StringUtils.defaultIfBlank(withdrawReason, "成员主动撤回");
+            member.getSpec().setStatus("REJECTED");
+            annotations.put(REVIEW_ACTION, REVIEW_ACTION_WITHDRAW);
+            annotations.put(REVIEW_DESCRIPTION, reason);
+            annotations.put(OFFLINE_AT, reviewedAt);
+            annotations.put(OFFLINE_REASON, reason);
+            annotations.put(OFFLINE_SOURCE, "SELF_WITHDRAW");
+        } else {
+            member.getSpec().setStatus(statusBefore);
+            annotations.put(REVIEW_ACTION, REVIEW_ACTION_WITHDRAW_REJECT);
+        }
         
         client.update(member);
         memberFinder.evictCache();
 
         // 发送通知给用户
-        publishWithdrawReviewNotice(member, email, displayName, adminEmail, reviewResult, reviewStatus, statusBefore, withdrawReason);
+        if (config != null && config.isSendEmail()) {
+            publishWithdrawReviewNotice(member, email, displayName, adminEmail, reviewResult,
+                reviewStatus, approved ? "已下架" : statusBefore, withdrawReason);
+        }
 
         String action = approved ? "批准" : "拒绝";
         return ResponseEntity.ok(Map.of(
             "failed", false,
-            "message", "撤回申请已" + action + "，成员状态已恢复为" + statusBefore
+            "message", approved
+                ? "撤回申请已批准，成员已下架"
+                : "撤回申请已" + action + "，成员状态已恢复为" + statusBefore
         ));
     }
 
@@ -147,7 +210,10 @@ public class MemberWithdrawAdminEndpoint {
      */
     private void publishWithdrawReviewNotice(Member member, String email, String displayName, 
             String adminEmail, String reviewResult, String reviewStatus, String statusBefore, String withdrawReason) {
-        
+        if (StringUtils.isEmpty(email)) {
+            return;
+        }
+
         String url = externalLinkProcessor.processLink("/members");
         var reasonSubject = Reason.Subject.builder()
             .apiVersion(member.getApiVersion())
@@ -170,7 +236,7 @@ public class MemberWithdrawAdminEndpoint {
         // 注册订阅：让 plugin-mail-template 能匹配到这个 reason
         var interestReason = new run.halo.app.core.extension.notification.Subscription.InterestReason();
         interestReason.setReasonType(USER_MEMBER_WITHDRAW_REVIEW);
-        interestReason.setExpression("props.email == '%s'".formatted(email));
+        interestReason.setExpression("props.email == '%s'".formatted(email.replace("'", "''")));
         var subscriber = new run.halo.app.core.extension.notification.Subscription.Subscriber();
         subscriber.setName(UserIdentity.anonymousWithEmail(email).name());
         notificationCenter.subscribe(subscriber, interestReason).block();

@@ -11,8 +11,9 @@ import MemberForm from "./MemberForm.vue";
 const props = withDefaults(
   defineProps<{
     member: Member;
+    showStatus?: boolean;
   }>(),
-  {}
+  { showStatus: true }
 );
 
 const emit = defineEmits<{
@@ -24,6 +25,13 @@ const modal = useTemplateRef<InstanceType<typeof VModal> | null>("modal");
 
 const { mutate, isPending } = useMutation({
   mutationFn: (data: MemberFormState) => {
+    const nextAnnotations = {
+      ...(props.member.metadata.annotations || {}),
+      ...(data.annotations || {}),
+      ...(props.member.spec.status !== data.status
+        ? { "member.plugin.halo.run/review-notification": "pending" }
+        : {}),
+    };
     const jsonPatchInner = [
       { op: "add", path: "/spec/displayName", value: data.displayName },
       { op: "add", path: "/spec/email", value: data.email || "" },
@@ -35,7 +43,11 @@ const { mutate, isPending } = useMutation({
       { op: "add", path: "/spec/groupName", value: data.groupName || "" },
       { op: "add", path: "/spec/status", value: data.status },
       { op: "add", path: "/spec/priority", value: data.priority },
-      { op: "add", path: "/metadata/annotations", value: data.annotations || {} },
+      {
+        op: "add",
+        path: "/metadata/annotations",
+        value: nextAnnotations,
+      },
     ];
     return membersCoreApiClient.member.patch(props.member.metadata.name, jsonPatchInner);
   },
@@ -44,6 +56,7 @@ const { mutate, isPending } = useMutation({
     modal.value?.close();
     queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] });
     queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
+    queryClient.invalidateQueries({ queryKey: ["member-submits"] });
   },
 });
 
@@ -88,6 +101,7 @@ function handleDelete() {
         priority: member.spec.priority || 0,
         annotations: member.metadata.annotations,
       }"
+      :show-status="showStatus"
       @submit="onSubmit"
     />
 

@@ -42,6 +42,31 @@ export interface MemberGroup {
   };
 }
 
+export interface CronMemberSubmit {
+  apiVersion: "member.plugin.halo.run/v1alpha1";
+  kind: "CronMemberSubmit";
+  metadata: {
+    name: string;
+    creationTimestamp?: string;
+    resourceVersion?: string;
+    [key: string]: unknown;
+  };
+  spec: {
+    cron: string;
+    enabled: boolean;
+    cleanupRejected: boolean;
+    rejectedRetentionDays: number;
+    cleanupPending: boolean;
+    pendingRetentionDays: number;
+  };
+  status?: {
+    lastScheduledTimestamp?: string;
+    nextSchedulingTimestamp?: string;
+    lastCleanedCount?: number;
+    lastMessage?: string;
+  };
+}
+
 /** 表单状态类型 — 用于 Form 组件与 Modal 之间的数据传递 */
 export interface MemberFormState {
   displayName: string;

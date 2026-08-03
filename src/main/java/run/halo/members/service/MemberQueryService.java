@@ -30,7 +30,8 @@ public class MemberQueryService {
     public Mono<ListResult<MemberVo>> listMembers(MemberQuery query) {
         MemberQuery normalizedQuery = query.normalized();
 
-        return client.listAll(Member.class, null, null)
+        return client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort())
             .map(MemberVo::from)
             .filter(member -> matchesStatus(member, normalizedQuery.status()))
             .filter(member -> matchesGroup(member, normalizedQuery.groupName()))

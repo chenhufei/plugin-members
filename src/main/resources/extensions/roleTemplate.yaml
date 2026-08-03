@@ -11,7 +11,7 @@ metadata:
       ["plugin:members:view"]
 rules:
   - apiGroups: [ "member.plugin.halo.run" ]
-    resources: [ "members", "membergroups" ]
+    resources: [ "members", "membergroups", "cronmembersubmits" ]
     verbs: [ "get", "list" ]
   - apiGroups: [ "api.plugin.halo.run" ]
     resources: [ "plugins/members" ]
@@ -33,7 +33,7 @@ metadata:
       ["role-template-member-view"]
 rules:
   - apiGroups: [ "member.plugin.halo.run" ]
-    resources: [ "members", "membergroups" ]
+    resources: [ "members", "membergroups", "cronmembersubmits" ]
     verbs: [ "create", "patch", "update", "delete", "deletecollection" ]
   - apiGroups: [ "console.api.member.plugin.halo.run" ]
     resources: [ "members" ]

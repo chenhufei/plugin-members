@@ -1,14 +1,18 @@
 <script lang="ts" setup>
 import { useMemberGroupFetch } from "@/composables/use-group-fetch";
+import { fetchQqInfo } from "@/api";
 import type { MemberFormState } from "@/types";
 import { Toast, VButton } from "@halo-dev/components";
 import jsQR from "jsqr";
 import { nextTick, onMounted, ref, shallowRef, toRaw, useTemplateRef } from "vue";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   name?: string;
   formState?: MemberFormState;
-}>();
+  showStatus?: boolean;
+}>(), {
+  showStatus: true,
+});
 
 const emit = defineEmits<{
   (event: "submit", data: MemberFormState): void;
@@ -53,39 +57,19 @@ function validateQQ(qq: string) {
   return /^\d{5,12}$/.test(qq);
 }
 
-async function fetchQQNickname(qq: string) {
-  const apis = [
-    `https://wiki.kikiw.cn/qq.php?qq=${qq}`,
-    `https://api.vvhan.com/api/qq.info?qq=${qq}`,
-  ];
-  for (const url of apis) {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 3000);
-      const res = await fetch(url, { signal: ctrl.signal, cache: "no-cache" });
-      clearTimeout(t);
-      if (!res.ok) continue;
-      const body = await res.json();
-      const nick = body.data?.nick || body.nick || body.nickname || body.name || body.data?.nickname;
-      if (nick) return nick.trim();
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
 async function handleFetchQQInfo() {
   if (!validateQQ(data.value.qq)) return;
   qqNicknameLoading.value = true;
   try {
-    if (!userModified.value.avatar) data.value.avatar = `https://q1.qlogo.cn/g?b=qq&nk=${data.value.qq}&s=640`;
-    if (!userModified.value.email && (!data.value.email || data.value.email.endsWith("@qq.com")))
-      data.value.email = `${data.value.qq}@qq.com`;
-    const nick = await fetchQQNickname(data.value.qq);
-    if (nick && !userModified.value.displayName && (!data.value.displayName || data.value.displayName.startsWith("QQ用户"))) {
-      data.value.displayName = nick;
-      Toast.success(`已获取QQ昵称：${nick}`);
+    const { data: qqInfo } = await fetchQqInfo(data.value.qq);
+    if (!userModified.value.avatar && qqInfo.avatar) data.value.avatar = qqInfo.avatar;
+    if (!userModified.value.email && qqInfo.email) data.value.email = qqInfo.email;
+    if (qqInfo.nickname && !userModified.value.displayName
+      && (!data.value.displayName || data.value.displayName.startsWith("QQ用户"))) {
+      data.value.displayName = qqInfo.nickname;
+      Toast.success(`已获取 QQ 昵称：${qqInfo.nickname}`);
+    } else if (!qqInfo.nickname) {
+      Toast.success("已获取 QQ 头像和邮箱，该账号未返回昵称");
     }
   } finally {
     qqNicknameLoading.value = false;
@@ -186,7 +170,7 @@ async function onSubmit() {
             ...groups.map((g) => ({ label: g.spec.displayName, value: g.metadata.name }))
           ]"
         />
-        <FormKit type="select" name="status" v-model="data.status" label="状态"
+        <FormKit v-if="showStatus" type="select" name="status" v-model="data.status" label="状态"
           :options="[
             { label: '待审核', value: 'PENDING' },
             { label: '已通过', value: 'APPROVED' },
