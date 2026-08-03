@@ -16,9 +16,11 @@ const modal = useTemplateRef<InstanceType<typeof VModal> | null>("modal");
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (data: GroupFormState) => {
-    // Fetch all groups to calculate max priority
     const { data: groupList } = await membersCoreApiClient.memberGroup.list();
-    const maxPriority = groupList.items?.[0]?.spec?.priority || 0;
+    const maxPriority = Math.max(
+      0,
+      ...(groupList.items || []).map((group) => group.spec.priority || 0),
+    );
 
     return membersCoreApiClient.memberGroup.create({
       apiVersion: "member.plugin.halo.run/v1alpha1",

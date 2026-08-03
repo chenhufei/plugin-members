@@ -23,7 +23,6 @@ const { mutate, isPending } = useMutation({
     return membersCoreApiClient.memberGroup.patch(props.group.metadata.name, [
       { op: "add", path: "/spec/displayName", value: data.displayName },
       { op: "add", path: "/spec/description", value: data.description || "" },
-      { op: "add", path: "/spec/priority", value: data.priority },
       { op: "add", path: "/metadata/annotations", value: data.annotations || {} },
     ]);
   },
@@ -45,7 +44,6 @@ function onSubmit(data: GroupFormState) {
       :formState="{
         displayName: group.spec.displayName,
         description: group.spec.description || '',
-        priority: group.spec.priority || 0,
         annotations: group.metadata.annotations,
       }"
       @submit="onSubmit"

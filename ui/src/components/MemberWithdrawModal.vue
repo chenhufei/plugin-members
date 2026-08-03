@@ -5,7 +5,7 @@
         <div class="withdraw-modal">
           <div class="withdraw-modal-header">
             <h3>撤回成员申请</h3>
-            <button class="close-btn" @click="close">✕</button>
+            <button type="button" class="close-btn" aria-label="关闭撤回申请" @click="close">✕</button>
           </div>
           
           <div class="withdraw-modal-body">

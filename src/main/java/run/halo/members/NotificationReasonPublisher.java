@@ -210,6 +210,9 @@ public class NotificationReasonPublisher {
                     var attributes = ReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
+                        .school(spec.getSchool())
+                        .qq(spec.getQq())
+                        .groupName(spec.getGroupName())
                         .memberUrl(url)
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
@@ -219,7 +222,8 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String memberUrl) {
+        record ReasonData(String email, String displayName, String school, String qq,
+                          String groupName, String memberUrl) {
         }
     }
 
@@ -249,6 +253,9 @@ public class NotificationReasonPublisher {
                     var attributes = ReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
+                        .school(spec.getSchool())
+                        .qq(spec.getQq())
+                        .groupName(spec.getGroupName())
                         .reviewDescription(reviewDescription)
                         .approved("APPROVED".equals(spec.getStatus()))
                         .memberUrl(url)
@@ -260,8 +267,8 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String reviewDescription, Boolean approved,
-                          String memberUrl) {
+        record ReasonData(String email, String displayName, String school, String qq, String groupName,
+                          String reviewDescription, Boolean approved, String memberUrl) {
         }
     }
 
@@ -291,6 +298,9 @@ public class NotificationReasonPublisher {
                     var attributes = ReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
+                        .school(spec.getSchool())
+                        .qq(spec.getQq())
+                        .groupName(spec.getGroupName())
                         .reviewDescription(reviewDescription != null ? reviewDescription : "无")
                         .memberUrl(url)
                         .build();
@@ -301,7 +311,8 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String reviewDescription, String memberUrl) {
+        record ReasonData(String email, String displayName, String school, String qq, String groupName,
+                          String reviewDescription, String memberUrl) {
         }
     }
 
@@ -332,6 +343,9 @@ public class NotificationReasonPublisher {
                     var attributes = ReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
+                        .school(spec.getSchool())
+                        .qq(spec.getQq())
+                        .groupName(spec.getGroupName())
                         .offlineReason(offlineReason)
                         .memberUrl(url)
                         .build();
@@ -342,7 +356,8 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String offlineReason, String memberUrl) {
+        record ReasonData(String email, String displayName, String school, String qq, String groupName,
+                          String offlineReason, String memberUrl) {
         }
     }
 

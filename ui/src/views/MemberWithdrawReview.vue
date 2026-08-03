@@ -143,6 +143,7 @@ function recordStatus(record: WithdrawRecord) {
         <button
           v-tooltip="'刷新'"
           type="button"
+          aria-label="刷新撤回记录"
           class=":uno: group cursor-pointer rounded p-1 hover:bg-gray-200"
           @click="refetch()"
         >

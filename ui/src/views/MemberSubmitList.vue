@@ -277,7 +277,7 @@ function deleteMember(member: Member) {
         <ListFilterSelect v-model="selectedStatus" label="状态" :items="statusOptions" />
         <ListFilterSelect v-model="selectedGroup" label="分组" :items="groupOptions" />
         <ListFilterSelect v-model="selectedSort" label="排序" :items="sortOptions" />
-        <VButton v-tooltip="'刷新'" size="sm" ghost @click="refetch()">
+        <VButton v-tooltip="'刷新'" aria-label="刷新申请记录" size="sm" ghost @click="refetch()">
           <template #icon>
             <IconRefreshLine :class="{ ':uno: animate-spin': isFetching }" class=":uno: h-4 w-4" />
           </template>
@@ -307,7 +307,7 @@ function deleteMember(member: Member) {
           />
         </template>
         <template #start>
-          <VEntityField>
+          <VEntityField class=":uno: w-14 min-w-14">
             <template #description>
               <VAvatar :alt="member.spec.displayName" :src="member.spec.avatar" size="md" />
             </template>
@@ -321,26 +321,26 @@ function deleteMember(member: Member) {
         </template>
 
         <template #end>
-          <VEntityField>
+          <VEntityField class=":uno: w-24 min-w-24">
             <template #description>
               <VStatusDot :state="statusState(member.spec.status)" :text="statusText(member)" />
             </template>
           </VEntityField>
-          <VEntityField>
+          <VEntityField class=":uno: w-36 min-w-36">
             <template #description>
-              <span class=":uno: block max-w-[9rem] truncate text-sm text-gray-500">
+              <span class=":uno: block w-full truncate text-sm text-gray-500">
                 {{ getGroupName(member.spec.groupName || "") }}
               </span>
             </template>
           </VEntityField>
-          <VEntityField v-if="member.metadata.creationTimestamp">
+          <VEntityField v-if="member.metadata.creationTimestamp" class=":uno: w-40 min-w-40">
             <template #description>
-              <span class=":uno: whitespace-nowrap text-sm text-gray-500">
+              <span class=":uno: whitespace-nowrap text-sm text-gray-500 tabular-nums">
                 {{ formatDatetime(member.metadata.creationTimestamp) }}
               </span>
             </template>
           </VEntityField>
-          <VEntityField class=":uno: min-w-[138px]">
+          <VEntityField v-permission="['plugin:members:manage']" class=":uno: min-w-[138px]">
             <template #description>
               <VSpace spacing="xs" class=":uno: justify-end">
                 <template v-if="member.spec.status === 'PENDING'">

@@ -163,7 +163,7 @@ function handleDeleteGroup({ deleteMembers }: { deleteMembers: boolean }) {
           <!-- 普通模式 -->
           <VSpace v-else class=":uno: flex-wrap">
             <VDropdown v-if="members.length || group">
-              <VButton size="sm" ghost><IconMore /></VButton>
+              <VButton size="sm" ghost aria-label="打开分组操作"><IconMore /></VButton>
               <template #popper>
                 <VDropdownItem v-if="members.length" @click="enabledSelect = true">批量选择</VDropdownItem>
                 <VDropdownItem v-if="group" @click="groupEditingModalVisible = true">编辑分组</VDropdownItem>

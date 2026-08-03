@@ -20,6 +20,9 @@ import type { Member } from "@/types";
 const GroupCreationModal = defineAsyncComponent(
   () => import("@/components/GroupCreationModal.vue"),
 );
+const GroupSortModal = defineAsyncComponent(
+  () => import("@/components/GroupSortModal.vue"),
+);
 const MemberImportModal = defineAsyncComponent(
   () => import("@/components/MemberImportModal.vue"),
 );
@@ -29,6 +32,7 @@ const handleRouteToFront = () => {
 };
 
 const groupCreationModalVisible = ref(false);
+const groupSortModalVisible = ref(false);
 const memberImportModalVisible = ref(false);
 const selectedStatusFilter = shallowRef<string>("all");
 const selectedSortFilter = shallowRef<string>("all");
@@ -87,8 +91,9 @@ const filteredGroups = computed(() => data.value || []);
     <div
       class=":uno: mb-4 flex flex-col gap-3 border border-gray-200 rounded-lg bg-white/90 p-3 shadow-sm md:flex-row md:items-center md:justify-between"
     >
-      <VSpace class=":uno: flex-wrap">
+      <VSpace v-permission="['plugin:members:manage']" class=":uno: flex-wrap">
         <VButton size="sm" @click="groupCreationModalVisible = true">新建分组</VButton>
+        <VButton size="sm" @click="groupSortModalVisible = true">调整排序</VButton>
         <VButton size="sm" @click="memberImportModalVisible = true">批量导入</VButton>
       </VSpace>
 
@@ -98,6 +103,7 @@ const filteredGroups = computed(() => data.value || []);
 
         <VButton
           v-tooltip="'刷新'"
+          aria-label="刷新成员列表"
           size="sm"
           ghost
           @click="refetch()"
@@ -130,5 +136,6 @@ const filteredGroups = computed(() => data.value || []);
   </div>
 
   <GroupCreationModal v-if="groupCreationModalVisible" @close="groupCreationModalVisible = false" />
+  <GroupSortModal v-if="groupSortModalVisible" @close="groupSortModalVisible = false" />
   <MemberImportModal v-if="memberImportModalVisible" @close="memberImportModalVisible = false" />
 </template>

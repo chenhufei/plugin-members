@@ -1,6 +1,6 @@
 {
   "name": "@halo-dev/plugin-members-console",
-  "version": "1.2.18",
+  "version": "1.2.19",
   "type": "module",
   "scripts": {
     "dev": "node ./scripts/run-pnpm-package-bin.mjs @rsbuild/core bin/rsbuild.js build --env-mode development --watch",
@@ -23,7 +23,9 @@
     "@halo-dev/ui-plugin-bundler-kit": "^2.23.0",
     "@rsbuild/core": "^1.6.6",
     "@types/node": "^16.18.126",
+    "@unocss/webpack": "^66.2.3",
     "typescript": "~5.9.3",
+    "unocss": "^66.2.3",
     "vue-tsc": "^2.2.12"
   },
   "packageManager": "pnpm@10.22.0"
