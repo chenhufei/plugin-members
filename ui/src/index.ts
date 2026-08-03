@@ -30,7 +30,7 @@ export default definePlugin({
       route: {
         path: "/members/submits",
         name: "MemberSubmits",
-        component: () => import("@/views/MemberSubmitList.vue"),
+        component: () => import("@/views/MemberSubmitManagement.vue"),
         meta: { permissions: ["plugin:members:view"], title: "申请记录" },
       },
     },
@@ -39,7 +39,7 @@ export default definePlugin({
       route: {
         path: "/members/withdrawals",
         name: "MemberWithdrawals",
-        component: () => import("@/views/MemberWithdrawReview.vue"),
+        redirect: "/members/submits?tab=withdrawals",
         meta: { permissions: ["plugin:members:manage"], title: "撤回审核" },
       },
     },

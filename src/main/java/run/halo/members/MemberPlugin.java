@@ -23,14 +23,16 @@ public class MemberPlugin extends BasePlugin {
 
     @Override
     public void start() {
-        // 注册 Member 和 MemberGroup 扩展
+        // 注册 Member、MemberGroup 和自助提交定时任务扩展
         schemeManager.register(Member.class);
         schemeManager.register(MemberGroup.class);
+        schemeManager.register(CronMemberSubmit.class);
     }
 
     @Override
     public void stop() {
         schemeManager.unregister(Scheme.buildFromType(Member.class));
         schemeManager.unregister(Scheme.buildFromType(MemberGroup.class));
+        schemeManager.unregister(Scheme.buildFromType(CronMemberSubmit.class));
     }
 }

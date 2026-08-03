@@ -25,6 +25,9 @@ import run.halo.members.service.SettingConfigMember;
 import static run.halo.members.MemberConstant.ADMIN_MEMBER_SUBMIT;
 import static run.halo.members.MemberConstant.MARK_AS_NOTIFIED;
 import static run.halo.members.MemberConstant.REVIEW_DESCRIPTION;
+import static run.halo.members.MemberConstant.REVIEW_ACTION;
+import static run.halo.members.MemberConstant.REVIEW_ACTION_OFFLINE;
+import static run.halo.members.MemberConstant.REVIEW_MEMBER_OFFLINE;
 import static run.halo.members.MemberConstant.REVIEW_MEMBER_SUBMIT;
 import static run.halo.members.MemberConstant.REVIEW_MEMBER_REJECT;
 import static run.halo.members.MemberConstant.USER_MEMBER_SUBMIT;
@@ -44,42 +47,30 @@ public class NotificationReasonPublisher {
     private final UserMemberSubmitNoticeReasonPublisher userMemberSubmitNoticeReasonPublisher;
     private final ReviewMemberSubmitNoticeReasonPublisher reviewMemberSubmitNoticeReasonPublisher;
     private final ReviewMemberRejectNoticeReasonPublisher reviewMemberRejectNoticeReasonPublisher;
+    private final ReviewMemberOfflineNoticeReasonPublisher reviewMemberOfflineNoticeReasonPublisher;
 
     @Async
     @EventListener(MemberEvent.class)
     public void onMemberSubmitted(MemberEvent event) {
         Member member = event.getMember();
-        var basicConfig = settingConfigMember.getBasicConfig().block();
-        
+        var basicConfig = settingConfigMember.getBasicConfig().blockOptional();
+
         log.info("处理成员提交事件: {}, 成员邮箱: {}", member.getMetadata().getName(), member.getSpec().getEmail());
-        
-        if (basicConfig != null) {
-            boolean sendEmail = basicConfig.isSendEmail();
-            log.info("邮件通知配置: sendEmail={}, adminEmail={}", sendEmail, basicConfig.getAdminEmail());
-            
-            if (sendEmail && StringUtils.isNotEmpty(basicConfig.getAdminEmail())) {
-                log.info("发送管理员通知邮件到: {}", basicConfig.getAdminEmail());
-                adminMemberSubmitNoticeReasonPublisher.publishReasonBy(member, basicConfig.getAdminEmail());
-            } else {
-                log.warn("未发送管理员通知邮件: sendEmail={}, adminEmail={}", sendEmail, basicConfig.getAdminEmail());
-            }
-            
-            var status = member.getSpec().getStatus();
-            String email = member.getSpec().getEmail();
-            if (StringUtils.isNotEmpty(email) && "PENDING".equals(status)) {
-                log.info("发送用户通知邮件到: {}, 状态: {}", email, status);
-                userMemberSubmitNoticeReasonPublisher.publishReasonBy(member, email);
-            } else if (StringUtils.isNotEmpty(email) && isReviewedStatus(status)) {
-                tryMarkReviewAsNotified(member.getMetadata().getName())
-                    .ifPresent(reviewedMember -> {
-                        log.info("发送自动审核结果通知邮件到: {}, 状态: {}", email, status);
-                        reviewMemberSubmitNoticeReasonPublisher.publishReasonBy(reviewedMember, email);
-                    });
-            } else {
-                log.warn("未发送用户通知邮件: email={}, status={}", email, status);
-            }
-        } else {
-            log.warn("基础配置为空，无法发送邮件通知");
+
+        if (basicConfig.isEmpty() || !basicConfig.get().isSendEmail()) {
+            log.debug("成员邮件通知未开启，跳过提交事件: {}", member.getMetadata().getName());
+            return;
+        }
+
+        var config = basicConfig.get();
+        if (StringUtils.isNotEmpty(config.getAdminEmail())) {
+            adminMemberSubmitNoticeReasonPublisher.publishReasonBy(member, config.getAdminEmail());
+        }
+
+        var status = member.getSpec().getStatus();
+        String email = member.getSpec().getEmail();
+        if (StringUtils.isNotEmpty(email) && "PENDING".equals(status)) {
+            userMemberSubmitNoticeReasonPublisher.publishReasonBy(member, email);
         }
     }
 
@@ -88,10 +79,13 @@ public class NotificationReasonPublisher {
     public void onMemberReviewed(ReviewMemberEvent event) {
         Member member = event.getMember();
         String email = member.getSpec().getEmail();
-        
-        log.info("处理成员审核事件: {}, 成员邮箱: {}, 状态: {}", 
-            member.getMetadata().getName(), email, member.getSpec().getStatus());
-        
+
+        var basicConfig = settingConfigMember.getBasicConfig().blockOptional();
+        if (basicConfig.isEmpty() || !basicConfig.get().isSendEmail()) {
+            log.debug("成员邮件通知未开启，跳过审核事件: {}", member.getMetadata().getName());
+            return;
+        }
+
         if (StringUtils.isEmpty(email)) {
             log.warn("成员邮箱为空，无法发送审核结果通知: {}", member.getMetadata().getName());
             return;
@@ -103,9 +97,12 @@ public class NotificationReasonPublisher {
             return;
         }
 
-        log.info("发送审核结果通知邮件到: {} (状态: {})", email, member.getSpec().getStatus());
         String status = member.getSpec().getStatus();
-        if ("REJECTED".equals(status)) {
+        var annotations = MetadataUtil.nullSafeAnnotations(markedMember.get());
+        if ("REJECTED".equals(status)
+            && REVIEW_ACTION_OFFLINE.equals(annotations.get(REVIEW_ACTION))) {
+            reviewMemberOfflineNoticeReasonPublisher.publishReasonBy(markedMember.get(), email);
+        } else if ("REJECTED".equals(status)) {
             reviewMemberRejectNoticeReasonPublisher.publishReasonBy(markedMember.get(), email);
         } else {
             reviewMemberSubmitNoticeReasonPublisher.publishReasonBy(markedMember.get(), email);
@@ -139,7 +136,8 @@ public class NotificationReasonPublisher {
         var annotations = MetadataUtil.nullSafeAnnotations(member);
         String status = StringUtils.defaultString(member.getSpec().getStatus());
         String reviewDescription = StringUtils.defaultString(annotations.get(REVIEW_DESCRIPTION));
-        return status + ":" + Integer.toHexString(reviewDescription.hashCode());
+        String reviewAction = StringUtils.defaultString(annotations.get(REVIEW_ACTION));
+        return status + ":" + reviewAction + ":" + Integer.toHexString(reviewDescription.hashCode());
     }
 
     @Component
@@ -148,11 +146,9 @@ public class NotificationReasonPublisher {
     static class AdminMemberSubmitNoticeReasonPublisher {
         private final NotificationReasonEmitter notificationReasonEmitter;
         private final ExternalLinkProcessor externalLinkProcessor;
-        private final SettingConfigMember settingConfigMember;
 
         public void publishReasonBy(Member member, String adminEmail) {
-            log.info("发布管理员通知: 成员={}, 管理员邮箱={}", member.getMetadata().getName(), adminEmail);
-            String url = externalLinkProcessor.processLink("/members");
+            String url = externalLinkProcessor.processLink("/console/members");
             var spec = member.getSpec();
             
             var reasonSubject = Reason.Subject.builder()
@@ -181,7 +177,6 @@ public class NotificationReasonPublisher {
                         .author(UserIdentity.anonymousWithEmail(adminEmail))
                         .subject(reasonSubject);
                 }).block();
-            log.info("管理员通知发布完成");
         }
 
         @Builder
@@ -197,10 +192,8 @@ public class NotificationReasonPublisher {
     static class UserMemberSubmitNoticeReasonPublisher {
         private final NotificationReasonEmitter notificationReasonEmitter;
         private final ExternalLinkProcessor externalLinkProcessor;
-        private final SettingConfigMember settingConfigMember;
 
         public void publishReasonBy(Member member, String email) {
-            log.info("发布用户通知: 成员={}, 用户邮箱={}", member.getMetadata().getName(), email);
             String url = externalLinkProcessor.processLink("/members");
             var spec = member.getSpec();
             
@@ -217,16 +210,16 @@ public class NotificationReasonPublisher {
                     var attributes = ReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
+                        .memberUrl(url)
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
                         .author(UserIdentity.anonymousWithEmail(email))
                         .subject(reasonSubject);
                 }).block();
-            log.info("用户通知发布完成");
         }
 
         @Builder
-        record ReasonData(String email, String displayName) {
+        record ReasonData(String email, String displayName, String memberUrl) {
         }
     }
 
@@ -236,11 +229,8 @@ public class NotificationReasonPublisher {
     static class ReviewMemberSubmitNoticeReasonPublisher {
         private final NotificationReasonEmitter notificationReasonEmitter;
         private final ExternalLinkProcessor externalLinkProcessor;
-        private final SettingConfigMember settingConfigMember;
 
         public void publishReasonBy(Member member, String email) {
-            log.info("发布审核结果通知: 成员={}, 用户邮箱={}, 状态={}", 
-                member.getMetadata().getName(), email, member.getSpec().getStatus());
             var annotations = MetadataUtil.nullSafeAnnotations(member);
             String reviewDescription = annotations.get(REVIEW_DESCRIPTION);
             String url = externalLinkProcessor.processLink("/members");
@@ -261,16 +251,17 @@ public class NotificationReasonPublisher {
                         .displayName(spec.getDisplayName())
                         .reviewDescription(reviewDescription)
                         .approved("APPROVED".equals(spec.getStatus()))
+                        .memberUrl(url)
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
                         .author(UserIdentity.anonymousWithEmail(email))
                         .subject(reasonSubject);
                 }).block();
-            log.info("审核结果通知发布完成");
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String reviewDescription, Boolean approved) {
+        record ReasonData(String email, String displayName, String reviewDescription, Boolean approved,
+                          String memberUrl) {
         }
     }
 
@@ -282,8 +273,6 @@ public class NotificationReasonPublisher {
         private final ExternalLinkProcessor externalLinkProcessor;
 
         public void publishReasonBy(Member member, String email) {
-            log.info("发布审核拒绝通知: 成员={}, 用户邮箱={}", 
-                member.getMetadata().getName(), email);
             var annotations = MetadataUtil.nullSafeAnnotations(member);
             String reviewDescription = annotations.get(REVIEW_DESCRIPTION);
             String url = externalLinkProcessor.processLink("/members");
@@ -303,16 +292,57 @@ public class NotificationReasonPublisher {
                         .email(email)
                         .displayName(spec.getDisplayName())
                         .reviewDescription(reviewDescription != null ? reviewDescription : "无")
+                        .memberUrl(url)
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
                         .author(UserIdentity.anonymousWithEmail(email))
                         .subject(reasonSubject);
                 }).block();
-            log.info("审核拒绝通知发布完成");
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String reviewDescription) {
+        record ReasonData(String email, String displayName, String reviewDescription, String memberUrl) {
+        }
+    }
+
+    @Component
+    @RequiredArgsConstructor
+    @SuppressWarnings("deprecation")
+    static class ReviewMemberOfflineNoticeReasonPublisher {
+        private final NotificationReasonEmitter notificationReasonEmitter;
+        private final ExternalLinkProcessor externalLinkProcessor;
+
+        public void publishReasonBy(Member member, String email) {
+            var annotations = MetadataUtil.nullSafeAnnotations(member);
+            String offlineReason = StringUtils.defaultIfBlank(
+                annotations.get(REVIEW_DESCRIPTION), "管理员未填写下架原因");
+            String url = externalLinkProcessor.processLink("/members");
+            var spec = member.getSpec();
+
+            var reasonSubject = Reason.Subject.builder()
+                .apiVersion(member.getApiVersion())
+                .kind(member.getKind())
+                .name(member.getMetadata().getName())
+                .title(spec.getDisplayName())
+                .url(url)
+                .build();
+
+            notificationReasonEmitter.emit(REVIEW_MEMBER_OFFLINE,
+                builder -> {
+                    var attributes = ReasonData.builder()
+                        .email(email)
+                        .displayName(spec.getDisplayName())
+                        .offlineReason(offlineReason)
+                        .memberUrl(url)
+                        .build();
+                    builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
+                        .author(UserIdentity.anonymousWithEmail(email))
+                        .subject(reasonSubject);
+                }).block();
+        }
+
+        @Builder
+        record ReasonData(String email, String displayName, String offlineReason, String memberUrl) {
         }
     }
 

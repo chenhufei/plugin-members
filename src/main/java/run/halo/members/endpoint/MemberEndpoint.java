@@ -120,8 +120,10 @@ public class MemberEndpoint implements CustomEndpoint {
         }
         final String finalQq = qq;
         return settingConfigMember.getBasicConfig()
-            .flatMap(config -> Mono.fromCallable(() -> requestQqInfo(finalQq, config.getUapisToken()))
-                .subscribeOn(Schedulers.boundedElastic()))
+            .flatMap(config -> performSecurityCheck(request, config)
+                .then(performRateLimitCheck(request, config))
+                .then(Mono.fromCallable(() -> requestQqInfo(finalQq, config.getUapisToken()))
+                    .subscribeOn(Schedulers.boundedElastic())))
             .flatMap(info -> ServerResponse.ok().bodyValue(info))
             .onErrorResume(error -> {
                 log.warn("获取 QQ 信息失败, qq={}: {}", finalQq, error.getMessage());

@@ -37,9 +37,11 @@ public class MemberStatisticsServiceImpl implements MemberStatisticsService {
         
         return Mono.zip(
             // 获取所有成员
-            client.listAll(Member.class, null, null).collectList(),
+            client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort()).collectList(),
             // 获取所有分组
-            client.listAll(MemberGroup.class, null, null).count()
+            client.listAll(MemberGroup.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort()).count()
         ).map(tuple -> {
             var members = tuple.getT1();
             int totalGroups = tuple.getT2().intValue();
@@ -96,7 +98,8 @@ public class MemberStatisticsServiceImpl implements MemberStatisticsService {
     public Mono<Map<String, Integer>> getGroupStatistics() {
         log.debug("获取分组统计");
         
-        return client.listAll(Member.class, null, null)
+        return client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort())
             .collect(Collectors.groupingBy(
                 m -> m.getSpec().getGroupName() != null ? m.getSpec().getGroupName() : "未分组",
                 Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
@@ -116,7 +119,8 @@ public class MemberStatisticsServiceImpl implements MemberStatisticsService {
     public Mono<Map<String, Integer>> getStatusStatistics() {
         log.debug("获取状态统计");
         
-        return client.listAll(Member.class, null, null)
+        return client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort())
             .collect(Collectors.groupingBy(
                 m -> m.getSpec().getStatus() != null ? m.getSpec().getStatus() : "UNKNOWN",
                 Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
@@ -127,7 +131,8 @@ public class MemberStatisticsServiceImpl implements MemberStatisticsService {
     public Mono<Map<String, Integer>> getSchoolStatistics() {
         log.debug("获取学校统计（Top 10）");
         
-        return client.listAll(Member.class, null, null)
+        return client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort())
             .collect(Collectors.groupingBy(
                 m -> m.getSpec().getSchool() != null ? m.getSpec().getSchool() : "未知",
                 Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
@@ -152,7 +157,8 @@ public class MemberStatisticsServiceImpl implements MemberStatisticsService {
         LocalDate startDate = LocalDate.now().minusDays(days - 1);
         Instant cutoffTime = startDate.atStartOfDay(ZoneId.systemDefault()).toInstant();
         
-        return client.listAll(Member.class, null, null)
+        return client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort())
             .filter(member -> {
                 Instant creationTime = member.getMetadata().getCreationTimestamp();
                 return creationTime != null && !creationTime.isBefore(cutoffTime);

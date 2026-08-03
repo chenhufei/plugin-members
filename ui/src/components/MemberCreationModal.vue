@@ -39,6 +39,7 @@ const { mutate, isPending } = useMutation({
         school: data.school,
         qq: data.qq,
         avatar: data.avatar,
+        background: data.background,
         qqFriendLink: data.qqFriendLink,
         groupName: props.group?.metadata.name || data.groupName,
         status: data.status,

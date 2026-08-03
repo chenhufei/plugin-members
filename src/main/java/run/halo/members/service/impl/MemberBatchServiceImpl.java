@@ -17,9 +17,12 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.extension.MetadataUtil;
 import run.halo.members.Member;
 import run.halo.members.finders.impl.MemberFinderImpl;
 import run.halo.members.service.MemberBatchService;
+import static run.halo.members.MemberConstant.REVIEW_NOTIFICATION;
+import static run.halo.members.MemberConstant.REVIEW_NOTIFICATION_PENDING;
 
 /**
  * 成员批量操作服务实现
@@ -44,6 +47,8 @@ public class MemberBatchServiceImpl implements MemberBatchService {
 
         return executeBatch(memberNames, "审核成员失败", member -> {
             member.getSpec().setStatus(approved ? "APPROVED" : "REJECTED");
+            MetadataUtil.nullSafeAnnotations(member)
+                .put(REVIEW_NOTIFICATION, REVIEW_NOTIFICATION_PENDING);
             return client.update(member);
         });
     }
@@ -145,7 +150,8 @@ public class MemberBatchServiceImpl implements MemberBatchService {
         
         Flux<Member> memberFlux = memberNames != null && !memberNames.isEmpty()
             ? Flux.fromIterable(memberNames).flatMap(name -> client.fetch(Member.class, name))
-            : client.listAll(Member.class, null, null);
+            : client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort());
         
         return memberFlux
             .collectList()
@@ -186,7 +192,8 @@ public class MemberBatchServiceImpl implements MemberBatchService {
         
         Flux<Member> memberFlux = memberNames != null && !memberNames.isEmpty()
             ? Flux.fromIterable(memberNames).flatMap(name -> client.fetch(Member.class, name))
-            : client.listAll(Member.class, null, null);
+            : client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort());
         
         return memberFlux
             .collectList()

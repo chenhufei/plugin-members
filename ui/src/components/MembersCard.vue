@@ -69,101 +69,6 @@ function handleSelectAll() {
   selectedMemberNames.value = members.value.map((m) => m.metadata.name);
 }
 
-// 单个审批
-function handleApprove(member: Member) {
-  Dialog.warning({
-    title: "确认通过该成员？",
-    description: `将通过「${member.spec.displayName}」的申请。`,
-    confirmType: "secondary",
-    onConfirm: async () => {
-      await membersCoreApiClient.member.patch(member.metadata.name, [
-        { op: "add", path: "/spec/status", value: "APPROVED" },
-      ]);
-      Toast.success("已通过");
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-    },
-  });
-}
-
-function handleReject(member: Member) {
-  Dialog.warning({
-    title: "确认拒绝该成员？",
-    description: `将拒绝「${member.spec.displayName}」的申请。`,
-    confirmType: "danger",
-    onConfirm: async () => {
-      await membersCoreApiClient.member.patch(member.metadata.name, [
-        { op: "add", path: "/spec/status", value: "REJECTED" },
-      ]);
-      Toast.success("已拒绝");
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-    },
-  });
-}
-
-function handleRevert(member: Member) {
-  const reverting = ref(false);
-  
-  Dialog.warning({
-    title: "撤回审核？",
-    description: `将「${member.spec.displayName}」的状态恢复为待审核。`,
-    confirmType: "primary",
-    confirmText: "确认撤回",
-    showCancel: true,
-    cancelText: "取消",
-    onConfirm: async () => {
-      if (reverting.value) return;
-      reverting.value = true;
-      const patchOps: Array<{ op: string; path: string; value?: string }> = [
-        { op: "add", path: "/spec/status", value: "PENDING" },
-        { op: "add", path: "/metadata/annotations/member.plugin.halo.run~1review-description", value: "已撤回审核，恢复待审核状态" },
-      ];
-      await membersCoreApiClient.member.patch(member.metadata.name, patchOps);
-      Toast.success("已撤回");
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-      reverting.value = false;
-    },
-  });
-}
-
-// 批量审批
-function handleApproveInBatch() {
-  Dialog.warning({
-    title: "批量通过审核？",
-    description: `将通过 ${selectedMemberNames.value.length} 个成员的申请。`,
-    confirmType: "secondary",
-    onConfirm: async () => {
-      for (const name of selectedMemberNames.value) {
-        await membersCoreApiClient.member.patch(name, [
-          { op: "add", path: "/spec/status", value: "APPROVED" },
-        ]);
-      }
-      Toast.success("批量通过成功");
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-      enabledSelect.value = false;
-      selectedMemberNames.value.length = 0;
-    },
-  });
-}
-
-function handleRejectInBatch() {
-  Dialog.warning({
-    title: "批量拒绝？",
-    description: `将拒绝 ${selectedMemberNames.value.length} 个成员的申请。`,
-    confirmType: "danger",
-    onConfirm: async () => {
-      for (const name of selectedMemberNames.value) {
-        await membersCoreApiClient.member.patch(name, [
-          { op: "add", path: "/spec/status", value: "REJECTED" },
-        ]);
-      }
-      Toast.success("批量拒绝成功");
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-      enabledSelect.value = false;
-      selectedMemberNames.value.length = 0;
-    },
-  });
-}
-
 function handleDeleteInBatch() {
   Dialog.warning({
     title: "是否确认删除选中的成员？",
@@ -239,8 +144,6 @@ function handleDeleteGroup({ deleteMembers }: { deleteMembers: boolean }) {
           <VSpace v-if="enabledSelect" class=":uno: flex-wrap">
             <VButton size="sm" @click="handleSelectAll">全选</VButton>
             <VButton size="sm" @click="selectedMemberNames.length = 0">清空</VButton>
-            <VButton size="sm" type="secondary" :disabled="selectedMemberNames.length === 0" @click="handleApproveInBatch">批量同意</VButton>
-            <VButton size="sm" type="danger" :disabled="selectedMemberNames.length === 0" @click="handleRejectInBatch">批量拒绝</VButton>
             <VDropdown>
               <VButton size="sm" :disabled="selectedMemberNames.length === 0 || !otherGroups?.length">移动</VButton>
               <template #popper>
@@ -290,10 +193,7 @@ function handleDeleteGroup({ deleteMembers }: { deleteMembers: boolean }) {
         :key="member.metadata.name"
         :member="member"
         :select-mode="enabledSelect"
-        @open-edit="handleOpenEdit(member)"
-        @approve="handleApprove(member)"
-        @reject="handleReject(member)"
-        @revert="handleRevert(member)"
+        @open-detail="handleOpenEdit(member)"
       >
         <template #checkbox>
           <input type="checkbox" v-model="selectedMemberNames" :value="member.metadata.name" />

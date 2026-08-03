@@ -69,13 +69,12 @@ const { data, isLoading, isFetching, refetch } = useQuery<GroupWithMembers[]>({
 const filteredGroups = computed(() => data.value || []);
 </script>
 <template>
-  <VPageHeader title="成员">
+  <VPageHeader title="成员管理">
     <template #icon>
       <IconTeam />
     </template>
     <template #actions>
-      <VButton size="sm" @click="$router.push('/members/submits')">申请记录</VButton>
-      <VButton size="sm" @click="$router.push('/members/withdrawals')">撤回审核</VButton>
+      <VButton size="sm" type="secondary" @click="$router.push('/members/submits')">自助提交管理</VButton>
       <VButton @click="handleRouteToFront" size="sm" ghost>
         <template #icon>
           <IconExternalLinkLine />

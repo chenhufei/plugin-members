@@ -167,7 +167,8 @@ public class MemberFinderImpl implements MemberFinder {
             return Flux.fromIterable(cached);
         }
         
-        return client.listAll(Member.class, null, null)
+        return client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort())
             .filter(member -> "APPROVED".equals(member.getSpec().getStatus())
                 && groupName.equals(member.getSpec().getGroupName()))
             .sort((m1, m2) -> {
@@ -199,7 +200,8 @@ public class MemberFinderImpl implements MemberFinder {
             return Flux.fromIterable(cached);
         }
         
-        return client.listAll(MemberGroup.class, null, null)
+        return client.listAll(MemberGroup.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort())
             .filter(group -> group.getSpec() != null)
             .sort((g1, g2) -> {
                 Integer p1 = g1.getSpec().getPriority();
@@ -223,7 +225,8 @@ public class MemberFinderImpl implements MemberFinder {
      * 获取所有已审核成员（批量查询）
      */
     private Mono<List<MemberVo>> getAllApprovedMembers() {
-        return client.listAll(Member.class, null, null)
+        return client.listAll(Member.class, new run.halo.app.extension.ListOptions(),
+                run.halo.app.extension.ExtensionUtil.defaultSort())
             .filter(member -> member.getSpec() != null
                 && "APPROVED".equals(member.getSpec().getStatus()))
             .map(MemberVo::from)

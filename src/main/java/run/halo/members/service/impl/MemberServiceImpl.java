@@ -1,6 +1,7 @@
 package run.halo.members.service.impl;
 
 import java.util.Arrays;
+import java.util.HashMap;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,10 @@ import run.halo.members.endpoint.MemberEndpoint;
 import run.halo.members.service.MemberService;
 import run.halo.members.service.SettingConfigMember;
 import run.halo.members.validation.MemberSubmitRequestValidator;
+import static run.halo.members.MemberConstant.SUBMISSION_NOTIFICATION;
+import static run.halo.members.MemberConstant.SUBMISSION_NOTIFICATION_PENDING;
+import static run.halo.members.MemberConstant.REVIEW_NOTIFICATION;
+import static run.halo.members.MemberConstant.REVIEW_NOTIFICATION_PENDING;
 
 /**
  * 成员服务实现
@@ -77,6 +82,13 @@ public class MemberServiceImpl implements MemberService {
         Member member = new Member();
         member.setMetadata(new run.halo.app.extension.Metadata());
         member.getMetadata().setGenerateName("member-");
+        member.getMetadata().setAnnotations(new HashMap<>());
+        member.getMetadata().getAnnotations()
+            .put(SUBMISSION_NOTIFICATION, SUBMISSION_NOTIFICATION_PENDING);
+        if ("APPROVED".equals(status)) {
+            member.getMetadata().getAnnotations()
+                .put(REVIEW_NOTIFICATION, REVIEW_NOTIFICATION_PENDING);
+        }
 
         Member.MemberSpec spec = new Member.MemberSpec();
         spec.setDisplayName(request.displayName());
