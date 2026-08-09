@@ -10,13 +10,20 @@ import org.junit.jupiter.api.Test;
 class WidgetCdnTest {
 
     @Test
-    void shouldUseMainlandFriendlyCdnForJsQr() throws IOException {
+    void shouldLoadBundledJsQrWithoutRuntimeCdn() throws IOException {
         var widgetSource = Files.readString(
             Path.of("widget", "src", "member-apply-widget.iife.js")
         );
 
         assertThat(widgetSource)
-            .contains("https://npm.elemecdn.com/jsqr@1.4.0/dist/jsQR.js")
-            .doesNotContain("cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com");
+            .contains("new URL('vendor/jsQR.js', WIDGET_ASSET_BASE).href")
+            .doesNotContain(
+                "npm.elemecdn.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"
+            );
+
+        assertThat(Path.of("ui", "node_modules", "jsqr", "dist", "jsQR.js"))
+            .exists();
+        assertThat(Path.of("src", "main", "resources", "static", "vendor", "jsQR.LICENSE.txt"))
+            .exists();
     }
 }

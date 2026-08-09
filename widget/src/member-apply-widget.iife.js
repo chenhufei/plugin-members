@@ -10,6 +10,10 @@
   'use strict';
 
   const API_BASE = '/apis/api.member.plugin.halo.run/v1alpha1';
+  const widgetScriptUrl = document.currentScript && document.currentScript.src;
+  const WIDGET_ASSET_BASE = widgetScriptUrl
+    ? new URL('.', widgetScriptUrl).href
+    : '/plugins/PluginMembers/assets/static/';
 
   function parseJsonResponse(response) {
     return response.text().then(function(text) {
@@ -720,13 +724,24 @@
   }
 
   // ===== 二维码解析（上传图片自动识别 QQ 好友链接） =====
+  var jsQrPromise = null;
+
   function loadJsQR(callback) {
     if (window.jsQR) { callback(window.jsQR); return; }
-    var s = document.createElement('script');
-    s.src = 'https://npm.elemecdn.com/jsqr@1.4.0/dist/jsQR.js';
-    s.onload = function() { callback(window.jsQR); };
-    s.onerror = function() { callback(null); };
-    document.head.appendChild(s);
+    if (!jsQrPromise) {
+      jsQrPromise = new Promise(function(resolve) {
+        var s = document.createElement('script');
+        s.src = new URL('vendor/jsQR.js', WIDGET_ASSET_BASE).href;
+        s.dataset.memberJsqr = 'true';
+        s.onload = function() { resolve(window.jsQR || null); };
+        s.onerror = function() {
+          jsQrPromise = null;
+          resolve(null);
+        };
+        document.head.appendChild(s);
+      });
+    }
+    jsQrPromise.then(callback);
   }
 
   function parseQrCode(input) {
