@@ -6,9 +6,16 @@ export interface GroupWithMembers {
 }
 
 export function groupMembers(groups: MemberGroup[], members: Member[]) {
-  const groupNames = groups.map((g) => g.metadata.name);
+  const orderedGroups = [...groups].sort((a, b) => {
+    const nameCompare = (a.spec?.displayName || "").localeCompare(
+      b.spec?.displayName || "",
+      "zh-Hans",
+    );
+    return nameCompare || a.metadata.name.localeCompare(b.metadata.name);
+  });
+  const groupNames = orderedGroups.map((g) => g.metadata.name);
 
-  const grouped: GroupWithMembers[] = groups.map((group) => ({
+  const grouped: GroupWithMembers[] = orderedGroups.map((group) => ({
     group,
     members: members.filter((m) => m.spec?.groupName === group.metadata.name),
   }));
@@ -20,6 +27,6 @@ export function groupMembers(groups: MemberGroup[], members: Member[]) {
     ),
   };
 
-  // Ungrouped first, then grouped by priority
+  // Keep ungrouped members first, followed by stable display-name order.
   return [ungrouped, ...grouped].filter((g) => g.members.length > 0);
 }

@@ -111,10 +111,12 @@ public class MemberFinderImpl implements MemberFinder {
                 .filter(group -> group.getMembers() != null && !group.getMembers().isEmpty())
                 .collect(Collectors.toCollection(ArrayList::new));
 
-            visibleGroups.sort(Comparator.comparing(
-                g -> g.getSpec() != null ? g.getSpec().getPriority() : null,
-                Comparator.nullsLast(Comparator.reverseOrder())
-            ));
+            visibleGroups.sort(Comparator
+                .comparing((MemberGroupVo group) -> group.getSpec() != null
+                        ? group.getSpec().getDisplayName() : null,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(group -> group.getMetadata() != null
+                        ? group.getMetadata().getName() : ""));
             
             ListResult<MemberGroupVo> result = new ListResult<>(visibleGroups);
             
@@ -203,14 +205,10 @@ public class MemberFinderImpl implements MemberFinder {
         return client.listAll(MemberGroup.class, new run.halo.app.extension.ListOptions(),
                 run.halo.app.extension.ExtensionUtil.defaultSort())
             .filter(group -> group.getSpec() != null)
-            .sort((g1, g2) -> {
-                Integer p1 = g1.getSpec().getPriority();
-                Integer p2 = g2.getSpec().getPriority();
-                if (p1 == null && p2 == null) return 0;
-                if (p1 == null) return 1;
-                if (p2 == null) return -1;
-                return p2.compareTo(p1); // 降序
-            })
+            .sort(Comparator
+                .comparing((MemberGroup group) -> group.getSpec().getDisplayName(),
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(group -> group.getMetadata().getName()))
             .map(MemberGroupVo::from)
             .collectList()
             .doOnSuccess(groups -> {
@@ -281,8 +279,6 @@ public class MemberFinderImpl implements MemberFinder {
 
         MemberGroup.MemberGroupSpec spec = new MemberGroup.MemberGroupSpec();
         spec.setDisplayName(displayName);
-        spec.setPriority(0);
-
         return MemberGroupVo.builder()
             .metadata(metadata)
             .spec(spec)

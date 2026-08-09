@@ -43,7 +43,6 @@
 ```json
 {
   "displayName": "默认分组",
-  "priority": 0,
   "description": "公开展示分组"
 }
 ```
@@ -151,7 +150,7 @@ GET /apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/members
 GET /apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membergroups
 ```
 
-返回 `MemberGroupVo[]`，按 `priority` 倒序排序。
+返回 `MemberGroupVo[]`，按分组显示名称排序；显示名称相同时按资源名称稳定排序。
 
 ## 控制台成员查询 API
 

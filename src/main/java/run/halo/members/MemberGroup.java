@@ -1,6 +1,5 @@
 package run.halo.members;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import run.halo.app.extension.AbstractExtension;
@@ -20,13 +19,8 @@ public class MemberGroup extends AbstractExtension {
 
     @Data
     public static class MemberGroupSpec {
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "分组显示名称")
         private String displayName;
 
-        @Schema(description = "优先级")
-        private Integer priority;
-
-        @Schema(description = "分组描述")
         private String description;
     }
 }
