@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   name: PluginMembers
 spec:
-  version: 1.2.19
+  version: 1.2.22
   requires: ">=2.23.0"
   author:
     name: chenhufei
@@ -13,7 +13,7 @@ spec:
   repo: https://github.com/chenhufei/plugin-members
   issues: https://github.com/chenhufei/plugin-members/issues
   displayName: "成员管理"
-  description: "成员管理模块，支持访客提交成员信息，管理员审核和分组展示。"
+  description: "为 Halo 提供成员分组、公示与访客自助申请，包含审核、撤回、通知、限流和主题集成能力。"
   license:
     - name: "GPL-3.0"
   configMapName: plugin-members-configmap

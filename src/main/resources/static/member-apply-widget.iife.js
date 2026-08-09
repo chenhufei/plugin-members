@@ -723,7 +723,7 @@
   function loadJsQR(callback) {
     if (window.jsQR) { callback(window.jsQR); return; }
     var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    s.src = 'https://npm.elemecdn.com/jsqr@1.4.0/dist/jsQR.js';
     s.onload = function() { callback(window.jsQR); };
     s.onerror = function() { callback(null); };
     document.head.appendChild(s);

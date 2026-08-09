@@ -340,22 +340,48 @@ function deleteMember(member: Member) {
               </span>
             </template>
           </VEntityField>
-          <VEntityField v-permission="['plugin:members:manage']" class=":uno: min-w-[138px]">
+          <VEntityField v-permission="['plugin:members:manage']" class=":uno: w-24 min-w-24">
             <template #description>
-              <VSpace spacing="xs" class=":uno: justify-end">
-                <template v-if="member.spec.status === 'PENDING'">
-                  <VButton size="sm" type="secondary" @click="approve(member)">通过</VButton>
-                  <VButton size="sm" type="danger" ghost @click="requestReason(member, 'REJECT')">拒绝</VButton>
-                </template>
+              <div class=":uno: flex justify-end">
                 <VButton
-                  v-else-if="member.spec.status === 'APPROVED'"
+                  v-if="member.spec.status === 'PENDING'"
+                  size="sm"
+                  type="secondary"
+                  @click="approve(member)"
+                >通过</VButton>
+                <VButton
+                  v-else-if="member.spec.status === 'REJECTED'"
+                  size="sm"
+                  type="secondary"
+                  @click="approve(member)"
+                >重新通过</VButton>
+              </div>
+            </template>
+          </VEntityField>
+          <VEntityField v-permission="['plugin:members:manage']" class=":uno: w-16 min-w-16">
+            <template #description>
+              <div class=":uno: flex justify-end">
+                <VButton
+                  v-if="member.spec.status === 'PENDING'"
+                  size="sm"
+                  type="danger"
+                  ghost
+                  @click="requestReason(member, 'REJECT')"
+                >拒绝</VButton>
+              </div>
+            </template>
+          </VEntityField>
+          <VEntityField v-permission="['plugin:members:manage']" class=":uno: w-16 min-w-16">
+            <template #description>
+              <div class=":uno: flex justify-end">
+                <VButton
+                  v-if="member.spec.status === 'APPROVED'"
                   size="sm"
                   type="danger"
                   ghost
                   @click="requestReason(member, 'OFFLINE')"
                 >下架</VButton>
-                <VButton v-else size="sm" type="secondary" @click="approve(member)">重新通过</VButton>
-              </VSpace>
+              </div>
             </template>
           </VEntityField>
         </template>

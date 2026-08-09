@@ -94,7 +94,7 @@ public class MemberWithdrawEndpoint {
                 return errorResponse("该成员暂无申请记录，无法撤回");
             }
 
-            String code = codeService.generateCode(email);
+            String code = codeService.generateCode(verificationKey(email, qq));
             publishVerificationCode(member, email, code);
             return successResponse("验证码已发送，请查收邮箱");
         }).subscribeOn(Schedulers.boundedElastic());
@@ -116,8 +116,13 @@ public class MemberWithdrawEndpoint {
         String code = request.code.trim();
         String qq = request.qq.trim();
         String reason = request.reason;
+        String verificationKey = verificationKey(email, qq);
+        if (!rateLimitService.isRequestAllowed("withdraw-verify:" + verificationKey,
+            10, Duration.ofMinutes(10))) {
+            return Mono.just(errorResponse("验证码尝试次数过多，请稍后重新获取"));
+        }
         return Mono.fromCallable(() -> {
-            boolean valid = codeService.verifyCode(email, code);
+            boolean valid = codeService.verifyCode(verificationKey, code);
             if (!valid) {
                 return errorResponse("验证码错误，请重新输入");
             }
@@ -305,6 +310,10 @@ public class MemberWithdrawEndpoint {
 
     private String escapeExpressionValue(String value) {
         return value.replace("'", "''");
+    }
+
+    private String verificationKey(String email, String qq) {
+        return email + ":" + qq;
     }
 
     /**
