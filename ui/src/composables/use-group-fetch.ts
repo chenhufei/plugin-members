@@ -23,7 +23,11 @@ export function useMemberGroupFetch() {
   const groups = computed(() => {
     const items = data.value?.items || [];
     return [...items].sort((a: MemberGroup, b: MemberGroup) => {
-      return (a.spec?.priority || 0) - (b.spec?.priority || 0);
+      const nameCompare = (a.spec?.displayName || "").localeCompare(
+        b.spec?.displayName || "",
+        "zh-Hans",
+      );
+      return nameCompare || a.metadata.name.localeCompare(b.metadata.name);
     });
   });
 

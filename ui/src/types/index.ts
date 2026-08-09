@@ -37,7 +37,6 @@ export interface MemberGroup {
   };
   spec: {
     displayName: string;
-    priority?: number;
     description?: string;
   };
 }
