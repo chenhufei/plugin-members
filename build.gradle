@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.2.22'
+version '1.2.23'
 
 repositories {
     mavenCentral()
@@ -50,8 +50,24 @@ tasks.register('buildFrontend', PnpmTask) {
 }
 
 tasks.register('syncWidgetResources', Copy) {
+    dependsOn('installDepsForUI')
     from(layout.projectDirectory.dir('widget/src'))
+    from(layout.projectDirectory.file('ui/node_modules/jsqr/dist/jsQR.js')) {
+        into('vendor')
+    }
+    from(layout.projectDirectory.file('ui/node_modules/jsqr/LICENSE')) {
+        into('vendor')
+        rename { 'jsQR.LICENSE.txt' }
+    }
     into(layout.projectDirectory.dir('src/main/resources/static'))
+    doLast {
+        def licenseFile = layout.projectDirectory
+            .file('src/main/resources/static/vendor/jsQR.LICENSE.txt').asFile
+        licenseFile.setText(
+            licenseFile.getText('UTF-8').stripTrailing() + System.lineSeparator(),
+            'UTF-8'
+        )
+    }
 }
 
 tasks.register('typecheckFrontend', PnpmTask) {
