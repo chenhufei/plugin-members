@@ -75,9 +75,7 @@ public class MemberServiceImpl implements MemberService {
         SettingConfigMember.BasicConfig config, String groupName) {
         String status = config.isAutoApprove() ? "APPROVED" : "PENDING";
 
-        log.info("提交成员申请: {}, 学校: {}, QQ: {}, 邮箱: {}, 分组: {}, 自动审核: {}",
-            request.displayName(), request.school(), request.qq(),
-            request.email(), groupName, config.isAutoApprove());
+        log.info("提交成员申请: 分组={}, 自动审核={}", groupName, config.isAutoApprove());
 
         Member member = new Member();
         member.setMetadata(new run.halo.app.extension.Metadata());
