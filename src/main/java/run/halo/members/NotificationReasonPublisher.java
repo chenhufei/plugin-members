@@ -55,7 +55,7 @@ public class NotificationReasonPublisher {
         Member member = event.getMember();
         var basicConfig = settingConfigMember.getBasicConfig().blockOptional();
 
-        log.info("处理成员提交事件: {}, 成员邮箱: {}", member.getMetadata().getName(), member.getSpec().getEmail());
+        log.info("处理成员提交事件: {}", member.getMetadata().getName());
 
         if (basicConfig.isEmpty() || !basicConfig.get().isSendEmail()) {
             log.debug("成员邮件通知未开启，跳过提交事件: {}", member.getMetadata().getName());

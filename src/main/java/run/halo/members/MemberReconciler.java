@@ -74,6 +74,10 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
 
                 memberFinder.evictCache();
                 var spec = member.getSpec();
+                if (spec == null) {
+                    log.warn("Skip member {} because spec is missing", request.name());
+                    return;
+                }
 
                 // 数据迁移：清理已废弃的 purpose 字段（如果存在）
                 cleanDeprecatedPurposeField(member, spec);
@@ -81,7 +85,7 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
                 String email = spec.getEmail();
                 String status = spec.getStatus();
 
-                log.info("Member {} status: {}, email: {}", request.name(), status, email);
+                log.info("Member {} status: {}", request.name(), status);
 
                 if (addFinalizers(member.getMetadata(), Set.of(FINALIZER_NAME))) {
                     log.info("Adding finalizers for member: {}", request.name());

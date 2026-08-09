@@ -36,7 +36,7 @@ public class VerificationCodeService {
         VerificationCodeEntry entry = new VerificationCodeEntry(code, Instant.now());
         codeStore.put(email, entry);
         
-        log.info("验证码已生成并存储: email={}", email);
+        log.info("验证码已生成并存储");
         return code;
     }
 
@@ -50,13 +50,13 @@ public class VerificationCodeService {
     public boolean verifyCode(String email, String code) {
         VerificationCodeEntry entry = codeStore.get(email);
         if (entry == null) {
-            log.warn("验证码不存在: email={}", email);
+            log.warn("验证码不存在");
             return false;
         }
 
         if (entry.isExpired()) {
             codeStore.remove(email);
-            log.warn("验证码已过期: email={}", email);
+            log.warn("验证码已过期");
             return false;
         }
 
@@ -64,9 +64,9 @@ public class VerificationCodeService {
         if (match) {
             // 验证成功后立即删除，防止重复使用
             codeStore.remove(email);
-            log.info("验证码验证成功: email={}", email);
+            log.info("验证码验证成功");
         } else {
-            log.warn("验证码不匹配: email={}", email);
+            log.warn("验证码不匹配");
         }
         return match;
     }

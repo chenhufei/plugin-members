@@ -126,7 +126,7 @@ public class MemberEndpoint implements CustomEndpoint {
                     .subscribeOn(Schedulers.boundedElastic())))
             .flatMap(info -> ServerResponse.ok().bodyValue(info))
             .onErrorResume(error -> {
-                log.warn("获取 QQ 信息失败, qq={}: {}", finalQq, error.getMessage());
+                log.warn("获取 QQ 信息失败: {}", error.getMessage());
                 return ServerResponse.ok()
                     .bodyValue(new QqInfoResponse(finalQq, "", tencentAvatar(finalQq),
                         finalQq + "@qq.com", ""));
@@ -159,7 +159,7 @@ public class MemberEndpoint implements CustomEndpoint {
                 }
             }
         } catch (Exception e) {
-            log.debug("uapis.cn 获取 QQ 信息失败, qq={}: {}", qq, e.getMessage());
+            log.debug("uapis.cn 获取 QQ 信息失败: {}", e.getMessage());
         }
 
         if (nickname.isEmpty() || isGarbled(nickname)) {
@@ -256,7 +256,7 @@ public class MemberEndpoint implements CustomEndpoint {
             }
             return "";
         } catch (Exception e) {
-            log.debug("腾讯接口获取 QQ 昵称失败, qq={}: {}", qq, e.getMessage());
+            log.debug("腾讯接口获取 QQ 昵称失败: {}", e.getMessage());
             return "";
         }
     }
