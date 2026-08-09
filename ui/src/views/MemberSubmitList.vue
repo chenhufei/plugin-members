@@ -6,10 +6,12 @@ import MemberReviewReasonModal from "@/components/MemberReviewReasonModal.vue";
 import { useMemberGroupFetch } from "@/composables/use-group-fetch";
 import { QK_MEMBERS } from "@/composables/use-member-fetch";
 import type { Member } from "@/types";
+import { downloadCsv } from "@/utils/csv";
 import { formatDatetime } from "@/utils/date";
 import {
   Dialog,
   IconRefreshLine,
+  IconSave,
   Toast,
   VAvatar,
   VButton,
@@ -149,6 +151,26 @@ function statusState(status: string) {
   } as Record<string, "warning" | "success" | "error" | "default">)[status] || "default";
 }
 
+function exportCurrentPage() {
+  if (!members.value.length) return;
+  downloadCsv(
+    `成员申请-第${page.value}页.csv`,
+    ["名称", "学校", "邮箱", "QQ", "分组", "状态", "提交时间"],
+    members.value.map((member) => [
+      member.spec.displayName,
+      member.spec.school,
+      member.spec.email,
+      member.spec.qq,
+      getGroupName(member.spec.groupName || ""),
+      statusText(member),
+      member.metadata.creationTimestamp
+        ? formatDatetime(member.metadata.creationTimestamp)
+        : "",
+    ]),
+  );
+  Toast.success(`已导出当前页 ${members.value.length} 条记录`);
+}
+
 async function invalidateMemberQueries() {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["member-submits"] }),
@@ -277,6 +299,18 @@ function deleteMember(member: Member) {
         <ListFilterSelect v-model="selectedStatus" label="状态" :items="statusOptions" />
         <ListFilterSelect v-model="selectedGroup" label="分组" :items="groupOptions" />
         <ListFilterSelect v-model="selectedSort" label="排序" :items="sortOptions" />
+        <VButton
+          v-if="members.length"
+          v-permission="['plugin:members:manage']"
+          v-tooltip="'导出当前筛选结果的本页记录'"
+          aria-label="导出当前页成员申请"
+          size="sm"
+          type="secondary"
+          @click="exportCurrentPage"
+        >
+          <template #icon><IconSave class=":uno: h-4 w-4" /></template>
+          导出当前页
+        </VButton>
         <VButton v-tooltip="'刷新'" aria-label="刷新申请记录" size="sm" ghost @click="refetch()">
           <template #icon>
             <IconRefreshLine :class="{ ':uno: animate-spin': isFetching }" class=":uno: h-4 w-4" />
