@@ -75,6 +75,34 @@ tasks.register('typecheckFrontend', PnpmTask) {
     dependsOn('installDepsForUI')
 }
 
+tasks.register('verifyVersionConsistency') {
+    group = 'verification'
+    description = 'Verify plugin and UI versions match the Gradle project version.'
+    inputs.files(
+        layout.projectDirectory.file('src/main/resources/plugin.yaml'),
+        layout.projectDirectory.file('ui/package.json')
+    )
+    doLast {
+        def expectedVersion = project.version.toString()
+        def pluginYaml = layout.projectDirectory
+            .file('src/main/resources/plugin.yaml').asFile.getText('UTF-8')
+        def versionMatcher = pluginYaml =~ /(?m)^\s{2}version:\s*["']?([^"'\s]+)["']?\s*$/
+        if (!versionMatcher.find()) {
+            throw new GradleException('Unable to read spec.version from plugin.yaml')
+        }
+        def pluginVersion = versionMatcher.group(1)
+        def uiPackage = new groovy.json.JsonSlurper().parse(
+            layout.projectDirectory.file('ui/package.json').asFile
+        )
+        def uiVersion = uiPackage.version.toString()
+        if (pluginVersion != expectedVersion || uiVersion != expectedVersion) {
+            throw new GradleException(
+                "Version mismatch: Gradle=${expectedVersion}, plugin.yaml=${pluginVersion}, ui/package.json=${uiVersion}"
+            )
+        }
+    }
+}
+
 tasks.register('installDepsForUI', PnpmTask) {
     args = ['install', '--frozen-lockfile']
 }
@@ -89,6 +117,7 @@ tasks.named('processResources') {
 
 tasks.named('check') {
     dependsOn('typecheckFrontend')
+    dependsOn('verifyVersionConsistency')
 }
 
 halo {

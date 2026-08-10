@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: plugin-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: halo-sigs/reusable-workflows/.github/workflows/plugin-ci.yaml@v3
+    with:
+      node-version: "24"
+      pnpm-version: "10"
+      java-version: "21"
+      ui-path: "ui"
