@@ -56,14 +56,30 @@ spec:
           help: 这些分组不会出现在前台成员申请表中
 
     - group: notification
-      label: 邮件通知
+      label: 消息通知
       formSchema:
+        - $formkit: switch
+          name: enableAdminNotification
+          id: enableAdminNotification
+          key: enableAdminNotification
+          label: 管理员站内通知
+          help: 新申请和撤回申请会显示在指定 Halo 用户的站内通知中
+          value: true
+        - $formkit: text
+          if: $get(enableAdminNotification).value === true
+          id: adminUsername
+          name: adminUsername
+          key: adminUsername
+          value: admin
+          label: 管理员用户名
+          help: 填写 Halo 登录用户名，不是显示昵称
+          validation: required
         - $formkit: switch
           name: sendEmail
           id: sendEmail
           key: sendEmail
           label: 发送邮件通知
-          help: 向管理员和申请人发送提交、通过、拒绝、下架与撤回结果
+          help: 向管理员邮箱和申请人邮箱发送提交、通过、拒绝、下架与撤回结果
           value: false
         - $formkit: text
           if: $get(sendEmail).value === true

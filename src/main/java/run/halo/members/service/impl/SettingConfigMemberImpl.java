@@ -52,6 +52,10 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
         config.setForbidSelectedGroupName(basic.getForbidSelectedGroupName());
 
         var notificationConfig = notification.orElse(null);
+        config.setEnableAdminNotification(notificationConfig == null
+            || notificationConfig.isEnableAdminNotification());
+        config.setAdminUsername(notificationConfig != null
+            ? notificationConfig.getAdminUsername() : "admin");
         config.setSendEmail(notificationConfig != null
             ? notificationConfig.isSendEmail() : basic.isSendEmail());
         config.setAdminEmail(notificationConfig != null
