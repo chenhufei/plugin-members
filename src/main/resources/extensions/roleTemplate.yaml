@@ -20,6 +20,10 @@ rules:
   - apiGroups: [ "api.member.plugin.halo.run" ]
     resources: [ "members" ]
     verbs: [ "get", "list" ]
+  # MemberList uses the console query endpoint even for read-only users.
+  - apiGroups: [ "console.api.member.plugin.halo.run" ]
+    resources: [ "members" ]
+    verbs: [ "get", "list" ]
 ---
 apiVersion: v1alpha1
 kind: Role
@@ -70,6 +74,8 @@ rules:
       - "/apis/api.member.plugin.halo.run/v1alpha1/membergroups"
       - "/apis/api.member.plugin.halo.run/v1alpha1/qq-info"
       - "/apis/api.member.plugin.halo.run/v1alpha1/membersubmits/-/submit"
+      - "/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/send-verification-code"
+      - "/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/withdraw"
     verbs: [ "get", "post" ]
   - apiGroups: [ "api.plugin.halo.run" ]
     resources: [ "plugins/members" ]

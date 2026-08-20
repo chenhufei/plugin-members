@@ -25,7 +25,7 @@ const MemberImportModal = defineAsyncComponent(
 );
 
 const handleRouteToFront = () => {
-  window.open("/members", "_blank");
+  window.open("/members", "_blank", "noopener,noreferrer");
 };
 
 const groupCreationModalVisible = ref(false);

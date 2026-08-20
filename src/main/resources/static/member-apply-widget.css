@@ -13,3 +13,41 @@
   --member-apply-widget-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --member-apply-widget-transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.member-apply-widget-floating-trigger {
+  position: fixed;
+  right: 2rem;
+  bottom: 6rem;
+  z-index: 999;
+  display: inline-flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--member-apply-widget-primary) 90%, transparent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color var(--member-apply-widget-transition-fast),
+    transform var(--member-apply-widget-transition-fast);
+}
+
+.member-apply-widget-floating-trigger:hover {
+  background: var(--member-apply-widget-primary);
+  transform: translateY(-1px);
+}
+
+.member-apply-widget-floating-trigger:focus-visible {
+  outline: 2px solid var(--member-apply-widget-primary-light);
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .member-apply-widget-floating-trigger {
+    right: 1rem;
+    bottom: 5rem;
+  }
+}

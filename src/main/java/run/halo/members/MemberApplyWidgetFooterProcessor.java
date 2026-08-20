@@ -62,10 +62,10 @@ public class MemberApplyWidgetFooterProcessor implements TemplateFooterProcessor
         if (withFloatingButton) {
             html += """
                 <button title="申请加入"
-                    onclick="MemberApplyWidget.open()"
-                    style="position: fixed; right: 2rem; bottom: 6rem; width: 3rem; height: 3rem; border-radius: 50%; background-color: rgba(209, 62, 67, 0.9); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.3s; z-index: 999; box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
-                    onmouseover="this.style.backgroundColor='rgba(209, 62, 67, 1)'"
-                    onmouseout="this.style.backgroundColor='rgba(209, 62, 67, 0.9)'"><svg
+                    type="button"
+                    class="member-apply-widget-floating-trigger"
+                    data-widget-open="MemberApplyWidget"
+                    aria-label="申请加入成员"><svg
                         viewBox="0 0 24 24" width="1.5em" height="1.5em">
                         <path fill="#fff"
                             d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-1V8H4v3H1v2h3v3h2v-3h3v-2H6zm9 3c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z">
