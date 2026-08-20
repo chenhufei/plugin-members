@@ -165,6 +165,9 @@ apiVersion: notification.halo.run/v1alpha1
 kind: ReasonType
 metadata:
   name: admin-member-withdraw
+  annotations:
+    rbac.authorization.halo.run/ui-permissions: |
+      [ "plugin:members:manage" ]
 spec:
   displayName: "成员撤回申请通知管理员"
   description: "成员提交撤回申请时通知管理员"

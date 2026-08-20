@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.4.3'
+version '1.4.4'
 
 repositories {
     mavenCentral()
@@ -123,6 +123,42 @@ tasks.register('verifyUiSourceContracts') {
     }
 }
 
+tasks.register('verifySecurityContracts') {
+    group = 'verification'
+    description = 'Verify anonymous API paths, read-only console access, and CSP-friendly widget entry points.'
+    inputs.files(
+        layout.projectDirectory.file('src/main/resources/extensions/roleTemplate.yaml'),
+        layout.projectDirectory.file('src/main/java/run/halo/members/MemberApplyWidgetFooterProcessor.java')
+    )
+    doLast {
+        def roleTemplate = layout.projectDirectory
+            .file('src/main/resources/extensions/roleTemplate.yaml').asFile.getText('UTF-8')
+        ['console.api.member.plugin.halo.run', 'resources: [ "members" ]',
+         '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/send-verification-code',
+         '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/withdraw']
+            .each { marker ->
+                if (!roleTemplate.contains(marker)) {
+                    throw new GradleException("Role template is missing required access contract: ${marker}")
+                }
+            }
+
+        def footerProcessor = layout.projectDirectory
+            .file('src/main/java/run/halo/members/MemberApplyWidgetFooterProcessor.java')
+            .asFile.getText('UTF-8')
+        ['data-widget-open="MemberApplyWidget"', 'class="member-apply-widget-floating-trigger"']
+            .each { marker ->
+                if (!footerProcessor.contains(marker)) {
+                    throw new GradleException("Member widget entry must use a data attribute: ${marker}")
+                }
+            }
+        ['onclick=', 'onmouseover=', 'onmouseout='].each { marker ->
+            if (footerProcessor.contains(marker)) {
+                throw new GradleException("Inline event handler is not allowed in widget footer: ${marker}")
+            }
+        }
+    }
+}
+
 tasks.register('installDepsForUI', PnpmTask) {
     args = ['install', '--frozen-lockfile']
 }
@@ -139,6 +175,7 @@ tasks.named('check') {
     dependsOn('typecheckFrontend')
     dependsOn('verifyVersionConsistency')
     dependsOn('verifyUiSourceContracts')
+    dependsOn('verifySecurityContracts')
 }
 
 halo {
