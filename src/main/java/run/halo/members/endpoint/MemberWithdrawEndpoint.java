@@ -176,8 +176,11 @@ public class MemberWithdrawEndpoint {
                 return successResponse("撤回申请已自动通过，成员已下架");
             }
 
-            if (config != null && config.isSendEmail()) {
+            if (config != null && (config.isEnableAdminNotification()
+                || config.isSendEmail())) {
                 publishWithdrawNotice(member, email, statusBefore, reason != null ? reason : "");
+            }
+            if (config != null && config.isSendEmail()) {
                 return successResponse("撤回申请已提交，管理员审核后将通过邮件通知您");
             }
             return successResponse("撤回申请已提交，请等待管理员审核");
@@ -227,11 +230,18 @@ public class MemberWithdrawEndpoint {
     private void publishWithdrawNotice(Member member, String email, String statusBefore,
         String withdrawReason) {
         SettingConfigMember.BasicConfig config = settingConfigMember.getBasicConfig().block();
-        if (config == null || !config.isSendEmail() || StringUtils.isEmpty(config.getAdminEmail())) {
+        if (config == null) {
             return;
         }
 
-        String adminEmail = config.getAdminEmail();
+        String adminUsername = StringUtils.defaultString(config.getAdminUsername());
+        String adminEmail = StringUtils.defaultString(config.getAdminEmail());
+        boolean notifyAdmin = config.isEnableAdminNotification()
+            && StringUtils.isNotBlank(adminUsername);
+        boolean emailAdmin = config.isSendEmail() && StringUtils.isNotBlank(adminEmail);
+        if (!notifyAdmin && !emailAdmin) {
+            return;
+        }
         var spec = member.getSpec();
         
         String url = externalLinkProcessor.processLink("/console/members");
@@ -244,6 +254,7 @@ public class MemberWithdrawEndpoint {
             .build();
         
         Map<String, Object> attrs = new HashMap<>();
+        attrs.put("adminUsername", adminUsername);
         attrs.put("adminEmail", adminEmail);
         attrs.put("withdrawEmail", email);
         attrs.put("displayName", spec.getDisplayName());
@@ -252,17 +263,17 @@ public class MemberWithdrawEndpoint {
         attrs.put("withdrawReason", withdrawReason);
         attrs.put("reviewUrl", url);
         
-        // 注册订阅：让 plugin-mail-template 能匹配到这个 reason
-        var interestReason = new run.halo.app.core.extension.notification.Subscription.InterestReason();
-        interestReason.setReasonType(ADMIN_MEMBER_WITHDRAW);
-        interestReason.setExpression("props.adminEmail == '%s'".formatted(escapeExpressionValue(adminEmail)));
-        var subscriber = new run.halo.app.core.extension.notification.Subscription.Subscriber();
-        subscriber.setName(UserIdentity.anonymousWithEmail(adminEmail).name());
-        notificationCenter.subscribe(subscriber, interestReason).block();
+        if (notifyAdmin) {
+            subscribeNotification(UserIdentity.of(adminUsername).name(), ADMIN_MEMBER_WITHDRAW,
+                "adminUsername", adminUsername);
+        }
+        if (emailAdmin) {
+            subscribeNotification(UserIdentity.anonymousWithEmail(adminEmail).name(),
+                ADMIN_MEMBER_WITHDRAW, "adminEmail", adminEmail);
+        }
         
         notificationReasonEmitter.emit(ADMIN_MEMBER_WITHDRAW,
             builder -> builder.attributes(attrs)
-                .author(UserIdentity.anonymousWithEmail(adminEmail))
                 .subject(reasonSubject)
             ).block();
     }
@@ -310,6 +321,17 @@ public class MemberWithdrawEndpoint {
 
     private String escapeExpressionValue(String value) {
         return value.replace("'", "''");
+    }
+
+    private void subscribeNotification(String subscriberName, String reasonType,
+        String propertyName, String value) {
+        var interestReason = new run.halo.app.core.extension.notification.Subscription.InterestReason();
+        interestReason.setReasonType(reasonType);
+        interestReason.setExpression("props.%s == '%s'".formatted(propertyName,
+            escapeExpressionValue(value)));
+        var subscriber = new run.halo.app.core.extension.notification.Subscription.Subscriber();
+        subscriber.setName(subscriberName);
+        notificationCenter.subscribe(subscriber, interestReason).block();
     }
 
     private String verificationKey(String email, String qq) {

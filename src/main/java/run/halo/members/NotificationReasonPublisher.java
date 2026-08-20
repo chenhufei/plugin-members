@@ -57,19 +57,23 @@ public class NotificationReasonPublisher {
 
         log.info("处理成员提交事件: {}", member.getMetadata().getName());
 
-        if (basicConfig.isEmpty() || !basicConfig.get().isSendEmail()) {
-            log.debug("成员邮件通知未开启，跳过提交事件: {}", member.getMetadata().getName());
+        if (basicConfig.isEmpty()) {
             return;
         }
 
         var config = basicConfig.get();
-        if (StringUtils.isNotEmpty(config.getAdminEmail())) {
-            adminMemberSubmitNoticeReasonPublisher.publishReasonBy(member, config.getAdminEmail());
+        boolean notifyAdmin = config.isEnableAdminNotification()
+            && StringUtils.isNotBlank(config.getAdminUsername());
+        boolean emailAdmin = config.isSendEmail() && StringUtils.isNotBlank(config.getAdminEmail());
+        if (notifyAdmin || emailAdmin) {
+            adminMemberSubmitNoticeReasonPublisher.publishReasonBy(member,
+                StringUtils.defaultString(config.getAdminUsername()),
+                StringUtils.defaultString(config.getAdminEmail()));
         }
 
         var status = member.getSpec().getStatus();
         String email = member.getSpec().getEmail();
-        if (StringUtils.isNotEmpty(email) && "PENDING".equals(status)) {
+        if (config.isSendEmail() && StringUtils.isNotEmpty(email) && "PENDING".equals(status)) {
             userMemberSubmitNoticeReasonPublisher.publishReasonBy(member, email);
         }
     }
@@ -147,7 +151,7 @@ public class NotificationReasonPublisher {
         private final NotificationReasonEmitter notificationReasonEmitter;
         private final ExternalLinkProcessor externalLinkProcessor;
 
-        public void publishReasonBy(Member member, String adminEmail) {
+        public void publishReasonBy(Member member, String adminUsername, String adminEmail) {
             String url = externalLinkProcessor.processLink("/console/members");
             var spec = member.getSpec();
             
@@ -162,6 +166,7 @@ public class NotificationReasonPublisher {
             notificationReasonEmitter.emit(ADMIN_MEMBER_SUBMIT,
                 builder -> {
                     var attributes = ReasonData.builder()
+                        .adminUsername(adminUsername)
                         .adminEmail(adminEmail)
                         .email(spec.getEmail())
                         .displayName(spec.getDisplayName())
@@ -174,13 +179,12 @@ public class NotificationReasonPublisher {
                         .description(spec.getDescription() != null ? spec.getDescription() : "")
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
-                        .author(UserIdentity.anonymousWithEmail(adminEmail))
                         .subject(reasonSubject);
                 }).block();
         }
 
         @Builder
-        record ReasonData(String adminEmail, String email, String displayName, String school,
+        record ReasonData(String adminUsername, String adminEmail, String email, String displayName, String school,
                           String qq, String groupName, Boolean autoApproved,
                           String reviewUrl, String website, String description) {
         }

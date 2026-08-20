@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.3.3'
+version '1.4.3'
 
 repositories {
     mavenCentral()
@@ -103,6 +103,26 @@ tasks.register('verifyVersionConsistency') {
     }
 }
 
+tasks.register('verifyUiSourceContracts') {
+    group = 'verification'
+    description = 'Reject duplicate public withdrawal UI and native browser alerts.'
+    inputs.dir(layout.projectDirectory.dir('ui/src'))
+    doLast {
+        def uiSource = layout.projectDirectory.dir('ui/src').asFile
+        def withdrawnModal = new File(uiSource, 'components/MemberWithdrawModal.vue')
+        if (withdrawnModal.exists()) {
+            throw new GradleException('Public withdrawal UI must remain in the plugin widget only.')
+        }
+        fileTree(uiSource).matching {
+            include '**/*.ts', '**/*.vue'
+        }.files.each { sourceFile ->
+            if (sourceFile.getText('UTF-8') =~ /\balert\s*\(/) {
+                throw new GradleException("Native alert is not allowed in ${sourceFile}")
+            }
+        }
+    }
+}
+
 tasks.register('installDepsForUI', PnpmTask) {
     args = ['install', '--frozen-lockfile']
 }
@@ -118,6 +138,7 @@ tasks.named('processResources') {
 tasks.named('check') {
     dependsOn('typecheckFrontend')
     dependsOn('verifyVersionConsistency')
+    dependsOn('verifyUiSourceContracts')
 }
 
 halo {

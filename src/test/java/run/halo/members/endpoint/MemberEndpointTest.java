@@ -5,6 +5,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import run.halo.members.exception.RateLimitExceededException;
 
 /**
  * Endpoint DTO 测试
@@ -52,5 +56,26 @@ class MemberEndpointTest {
     void testErrorResponseRecords() {
         assertEquals("提交失败", new MemberEndpoint.ErrorResponse("提交失败").message());
         assertEquals("公开查询失败", new MemberPublicEndpoint.ErrorResponse("公开查询失败").message());
+    }
+
+    @Test
+    @DisplayName("QQ 查询只对外部服务失败降级")
+    void testQqErrorPropagationPolicy() {
+        assertFalse(MemberEndpoint.shouldUseQqFallback(new SecurityException("blocked")));
+        assertFalse(MemberEndpoint.shouldUseQqFallback(
+            new RateLimitExceededException("limited")));
+        assertTrue(MemberEndpoint.shouldUseQqFallback(new IllegalStateException("upstream")));
+    }
+
+    @Test
+    @DisplayName("公开列表分页参数必须是有界数字")
+    void testPublicQueryIntegerValidation() {
+        assertEquals(1, MemberPublicEndpoint.parseQueryInt("1", "page", 1, 1_000_000));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+            () -> MemberPublicEndpoint.parseQueryInt("abc", "page", 1, 1_000_000));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+            () -> MemberPublicEndpoint.parseQueryInt("0", "page", 1, 1_000_000));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+            () -> MemberPublicEndpoint.parseQueryInt("101", "size", 1, 100));
     }
 }

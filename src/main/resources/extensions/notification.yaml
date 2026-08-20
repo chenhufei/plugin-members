@@ -9,6 +9,9 @@ spec:
   displayName: "成员申请通知管理员"
   description: "有新的成员申请时通知管理员"
   properties:
+    - name: adminUsername
+      type: string
+      description: "管理员用户名"
     - name: adminEmail
       type: string
       description: "管理员邮箱"
@@ -166,6 +169,9 @@ spec:
   displayName: "成员撤回申请通知管理员"
   description: "成员提交撤回申请时通知管理员"
   properties:
+    - name: adminUsername
+      type: string
+      description: "管理员用户名"
     - name: adminEmail
       type: string
       description: "管理员邮箱"

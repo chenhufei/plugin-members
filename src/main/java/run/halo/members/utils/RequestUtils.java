@@ -1,5 +1,8 @@
 package run.halo.members.utils;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+
 import org.springframework.web.reactive.function.server.ServerRequest;
 
 /**
@@ -23,22 +26,51 @@ public class RequestUtils {
      * @return 客户端IP地址
      */
     public static String getClientIP(ServerRequest request) {
-        // 尝试从 X-Forwarded-For 头部获取真实IP
-        String xForwardedFor = request.headers().firstHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
+        var remoteAddress = request.remoteAddress()
+            .orElseGet(() -> request.exchange().getRequest().getRemoteAddress());
+        if (remoteAddress != null && remoteAddress.getAddress() != null) {
+            // 只有来自本机/内网反向代理的请求才读取转发头，避免公网调用方伪造 IP。
+            if (isTrustedProxy(remoteAddress)) {
+                String forwarded = firstForwardedIp(request.headers().firstHeader("X-Forwarded-For"));
+                if (forwarded != null) {
+                    return forwarded;
+                }
+                String realIp = firstForwardedIp(request.headers().firstHeader("X-Real-IP"));
+                if (realIp != null) {
+                    return realIp;
+                }
+            }
+            return remoteAddress.getAddress().getHostAddress();
         }
-        
-        // 尝试从 X-Real-IP 头部获取
-        String xRealIP = request.headers().firstHeader("X-Real-IP");
-        if (xRealIP != null && !xRealIP.isEmpty()) {
-            return xRealIP;
+        return "unknown";
+    }
+
+    private static boolean isTrustedProxy(InetSocketAddress remoteAddress) {
+        InetAddress address = remoteAddress.getAddress();
+        return address.isAnyLocalAddress() || address.isLoopbackAddress()
+            || address.isLinkLocalAddress() || address.isSiteLocalAddress()
+            || isUniqueLocalIpv6(address);
+    }
+
+    private static boolean isUniqueLocalIpv6(InetAddress address) {
+        byte[] bytes = address.getAddress();
+        return bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc;
+    }
+
+    private static String firstForwardedIp(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
         }
-        
-        // 从远程地址获取
-        return request.remoteAddress()
-            .map(address -> address.getAddress().getHostAddress())
-            .orElse("unknown");
+        String candidate = value.split(",", 2)[0].trim();
+        if (candidate.isBlank() || !candidate.matches("(?:\\d{1,3}\\.){3}\\d{1,3}|[0-9a-fA-F:]+")) {
+            return null;
+        }
+        try {
+            InetAddress address = InetAddress.getByName(candidate);
+            return address.getHostAddress();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**

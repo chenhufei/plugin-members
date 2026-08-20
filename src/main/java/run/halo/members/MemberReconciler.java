@@ -92,9 +92,13 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
                     var basicConfig = settingConfigMember.getBasicConfig().block();
                     boolean sendEmail = basicConfig != null && basicConfig.isSendEmail();
 
+                    if (basicConfig != null && basicConfig.isEnableAdminNotification()
+                        && StringUtils.isNotBlank(basicConfig.getAdminUsername())) {
+                        adminNoticeSubscription(basicConfig.getAdminUsername());
+                    }
                     if (sendEmail) {
-                        if (StringUtils.isNotEmpty(basicConfig.getAdminEmail())) {
-                            adminNoticeSubscription(basicConfig.getAdminEmail());
+                        if (StringUtils.isNotBlank(basicConfig.getAdminEmail())) {
+                            adminEmailSubscription(basicConfig.getAdminEmail());
                         }
                         if (StringUtils.isNotEmpty(email) && "PENDING".equals(status)) {
                             userNoticeSubscription(email);
@@ -159,8 +163,12 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
         return Result.doNotRetry();
     }
 
-    void adminNoticeSubscription(String email) {
-        subscribeNotification(email, ADMIN_MEMBER_SUBMIT, "adminEmail");
+    void adminNoticeSubscription(String username) {
+        subscribeUserNotification(username, ADMIN_MEMBER_SUBMIT, "adminUsername");
+    }
+
+    void adminEmailSubscription(String email) {
+        subscribeEmailNotification(email, ADMIN_MEMBER_SUBMIT, "adminEmail");
     }
 
     static boolean tryMarkSubmissionAsNotified(Member member) {
@@ -182,7 +190,7 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
     }
 
     void userNoticeSubscription(String email) {
-        subscribeNotification(email, USER_MEMBER_SUBMIT, "email");
+        subscribeEmailNotification(email, USER_MEMBER_SUBMIT, "email");
     }
 
     void reviewNoticeSubscription(String email, String status, String reviewAction) {
@@ -194,17 +202,27 @@ public class MemberReconciler implements Reconciler<Reconciler.Request> {
         } else {
             reasonType = REVIEW_MEMBER_REJECT;
         }
-        subscribeNotification(email, reasonType, "email");
+        subscribeEmailNotification(email, reasonType, "email");
     }
 
-    private void subscribeNotification(String email, String reasonType, String propertyName) {
+    private void subscribeUserNotification(String username, String reasonType, String propertyName) {
+        subscribeNotification(UserIdentity.of(username).name(), username, reasonType, propertyName);
+    }
+
+    private void subscribeEmailNotification(String email, String reasonType, String propertyName) {
+        subscribeNotification(UserIdentity.anonymousWithEmail(email).name(), email,
+            reasonType, propertyName);
+    }
+
+    private void subscribeNotification(String subscriberName, String value,
+        String reasonType, String propertyName) {
         try {
             var interestReason = new Subscription.InterestReason();
             interestReason.setReasonType(reasonType);
-            String escapedEmail = email.replace("'", "''");
-            interestReason.setExpression("props.%s == '%s'".formatted(propertyName, escapedEmail));
+            String escapedValue = value.replace("'", "''");
+            interestReason.setExpression("props.%s == '%s'".formatted(propertyName, escapedValue));
             var subscriber = new Subscription.Subscriber();
-            subscriber.setName(UserIdentity.anonymousWithEmail(email).name());
+            subscriber.setName(subscriberName);
             notificationCenter.subscribe(subscriber, interestReason).block();
         } catch (Exception e) {
             log.warn("Failed to subscribe member notification for reasonType={}: {}",

@@ -186,22 +186,6 @@ export const membersBatchApiClient: MembersBatchApiClient = {
   },
 };
 
-// ==================== 撤回申请相关 API ====================
-
-/**
- * 发送验证码
- */
-export async function sendWithdrawVerificationCode(data: { email: string; qq: string }): Promise<any> {
-  return axiosInstance.post('/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/send-verification-code', data)
-}
-
-/**
- * 提交撤回申请
- */
-export async function submitWithdrawRequest(data: { email: string; code: string; qq: string; reason?: string }): Promise<any> {
-  return axiosInstance.post('/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/withdraw', data)
-}
-
 /**
  * 获取撤回申请列表（管理员）
  */

@@ -126,6 +126,14 @@ public class MemberEndpoint implements CustomEndpoint {
                     .subscribeOn(Schedulers.boundedElastic())))
             .flatMap(info -> ServerResponse.ok().bodyValue(info))
             .onErrorResume(error -> {
+                if (!shouldUseQqFallback(error)) {
+                    if (error instanceof SecurityException) {
+                        return ServerResponse.status(403)
+                            .bodyValue(new ErrorResponse("请求被安全策略拒绝"));
+                    }
+                    return ServerResponse.status(429)
+                        .bodyValue(new ErrorResponse("请求过于频繁，请稍后再试"));
+                }
                 log.warn("获取 QQ 信息失败: {}", error.getMessage());
                 return ServerResponse.ok()
                     .bodyValue(new QqInfoResponse(finalQq, "", tencentAvatar(finalQq),
@@ -169,6 +177,11 @@ public class MemberEndpoint implements CustomEndpoint {
             }
         }
         return new QqInfoResponse(qq, nickname, tencentAvatar(qq), qq + "@qq.com", region);
+    }
+
+    static boolean shouldUseQqFallback(Throwable error) {
+        return !(error instanceof SecurityException
+            || error instanceof RateLimitExceededException);
     }
 
     private boolean isGarbled(String text) {

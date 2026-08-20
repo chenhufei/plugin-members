@@ -67,6 +67,8 @@ async function handleFetchQQInfo() {
     } else {
       Toast.success("已获取 QQ 头像和邮箱，该账号未返回昵称");
     }
+  } catch {
+    Toast.error("获取 QQ 信息失败，请稍后重试或手动填写");
   } finally {
     qqNicknameLoading.value = false;
   }
@@ -80,10 +82,13 @@ function handleQRCodeUpload(e: Event) {
   const img = new Image();
   img.onload = () => {
     const canvas = document.createElement("canvas");
-    canvas.width = img.width; canvas.height = img.height;
+    const maxDimension = 1600;
+    const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
     const ctx = canvas.getContext("2d");
     if (!ctx) { qrCodeProcessing.value = false; return; }
-    ctx.drawImage(img, 0, 0);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     if (code?.data) {

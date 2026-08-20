@@ -15,6 +15,8 @@ public interface SettingConfigMember {
     class BasicConfig {
         private boolean autoApprove;
         private boolean autoApproveWithdraw;
+        private boolean enableAdminNotification = true;
+        private String adminUsername = "admin";
         private boolean sendEmail;
         private String adminEmail;
         private String defaultGroupName;
@@ -59,6 +61,8 @@ public interface SettingConfigMember {
     @Data
     class NotificationGroupConfig {
         public static final String GROUP = "notification";
+        private boolean enableAdminNotification = true;
+        private String adminUsername = "admin";
         private boolean sendEmail;
         private String adminEmail = "";
     }
