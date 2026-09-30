@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.4.4'
+version '1.4.6'
 
 repositories {
     mavenCentral()
@@ -38,8 +38,10 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 node {
-    download = true
-    version = '24.14.0'
+    // Use the Node.js installation supplied by the developer/CI setup.
+    // Avoid downloading a second archive during local builds.
+    download = false
+    version = '24.15.0'
     pnpmVersion = '10.22.0'
     nodeProjectDir = file("${project.projectDir}/ui")
 }

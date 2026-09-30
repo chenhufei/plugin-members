@@ -82,27 +82,12 @@ public class MemberQueryService {
 
     private Comparator<MemberVo> comparator(String sort) {
         return switch (sort) {
-            case "priority-asc" -> Comparator
-                .comparingInt((MemberVo member) -> priority(member))
-                .thenComparing(this::createdAt, Comparator.reverseOrder());
-            case "priority-desc" -> Comparator
-                .comparingInt((MemberVo member) -> priority(member))
-                .reversed()
-                .thenComparing(this::createdAt, Comparator.reverseOrder());
             case "createdTime-asc" -> Comparator.comparing(this::createdAt);
             case "name-asc" -> Comparator.comparing(this::displayName);
             case "name-desc" -> Comparator.comparing(this::displayName).reversed();
-            case "status-priority" -> Comparator
-                .comparingInt((MemberVo member) -> statusOrder(member.getSpec().getStatus()))
-                .thenComparing(this::createdAt, Comparator.reverseOrder());
             case "createdTime-desc" -> Comparator.comparing(this::createdAt).reversed();
             default -> Comparator.comparing(this::createdAt).reversed();
         };
-    }
-
-    private int priority(MemberVo member) {
-        Integer priority = member.getSpec().getPriority();
-        return priority == null ? 0 : priority;
     }
 
     private Instant createdAt(MemberVo member) {
@@ -114,14 +99,6 @@ public class MemberQueryService {
         return StringUtils.defaultString(member.getSpec().getDisplayName());
     }
 
-    private int statusOrder(String status) {
-        return switch (StringUtils.defaultString(status)) {
-            case "PENDING" -> 0;
-            case "REJECTED" -> 1;
-            case "APPROVED" -> 2;
-            default -> 3;
-        };
-    }
 
     public record MemberQuery(
         int page,

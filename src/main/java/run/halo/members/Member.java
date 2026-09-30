@@ -44,6 +44,7 @@ public class Member extends AbstractExtension {
         private String qqFriendLink;
 
         @Schema(description = "优先级")
+        @Deprecated
         private Integer priority;
 
         @Schema(description = "所属分组")

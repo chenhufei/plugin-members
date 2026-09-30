@@ -32,7 +32,7 @@ export function useMemberFetch(queryState: MemberQueryState) {
         keyword: optionalQueryValue(queryState.keyword.value),
         groupName: optionalQueryValue(queryState.groupName.value),
         status: optionalQueryValue(queryState.status.value),
-        sort: queryState.sort.value || "priority-desc",
+        sort: queryState.sort.value || "createdTime-desc",
       });
       return data;
     },

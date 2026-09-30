@@ -36,6 +36,8 @@ export interface QqInfo {
   avatar: string;
   email: string;
   region: string;
+  profileAvailable?: boolean;
+  source?: string;
 }
 
 export function fetchQqInfo(qq: string): ApiResponse<QqInfo> {
@@ -77,10 +79,6 @@ interface MembersBatchApiClient {
     batchChangeGroup: (
       memberNames: string[],
       groupName: string
-    ) => ApiResponse<BatchOperationResult>;
-    batchChangePriority: (
-      memberNames: string[],
-      priority: number
     ) => ApiResponse<BatchOperationResult>;
     exportCsv: (memberNames?: string[]) => ApiResponse<string>;
     exportJson: (memberNames?: string[]) => ApiResponse<string>;
@@ -165,12 +163,6 @@ export const membersBatchApiClient: MembersBatchApiClient = {
       return axiosInstance.post(`${batchBaseURL}/members/-/batch-change-group`, {
         memberNames,
         groupName,
-      });
-    },
-    batchChangePriority: (memberNames: string[], priority: number) => {
-      return axiosInstance.post(`${batchBaseURL}/members/-/batch-change-priority`, {
-        memberNames,
-        priority,
       });
     },
     exportCsv: (memberNames: string[] = []) => {

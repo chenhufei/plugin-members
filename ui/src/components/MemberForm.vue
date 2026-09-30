@@ -30,7 +30,6 @@ const data = ref<MemberFormState>({
   qqFriendLink: "",
   groupName: "",
   status: "PENDING",
-  priority: 0,
 });
 
 const qqNicknameLoading = shallowRef(false);
@@ -64,8 +63,12 @@ async function handleFetchQQInfo() {
     if (qqInfo.nickname) {
       data.value.displayName = qqInfo.nickname;
       Toast.success(`已获取 QQ 昵称：${qqInfo.nickname}`);
+    } else if (qqInfo.email) {
+      Toast.success("该 QQ 未公开昵称，已填入可用资料");
+    } else if (qqInfo.source === "no-public-profile") {
+      Toast.warning("该 QQ 未公开昵称或邮箱，请手动填写账号名称和邮箱");
     } else {
-      Toast.success("已获取 QQ 头像和邮箱，该账号未返回昵称");
+      Toast.warning("信息服务暂不可用，已提供头像地址，请手动填写账号名称和邮箱");
     }
   } catch {
     Toast.error("获取 QQ 信息失败，请稍后重试或手动填写");
@@ -178,7 +181,6 @@ async function onSubmit() {
             { label: '已拒绝', value: 'REJECTED' }
           ]"
         />
-        <FormKit type="number" name="priority" v-model="data.priority" label="优先级" />
       </div>
     </div>
   </FormKit>

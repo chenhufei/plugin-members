@@ -88,8 +88,8 @@ public class MemberFinderImpl implements MemberFinder {
                     membersByGroup.getOrDefault(groupName, List.of())
                 );
                 
-                // 按优先级排序成员
-                groupMembers.sort(this::compareMemberPriorityDesc);
+                // 使用稳定的创建时间与名称排序，不再依赖旧的 priority 字段。
+                groupMembers.sort(this::compareMemberOrder);
                 
                 group.setMembers(groupMembers);
             });
@@ -100,7 +100,7 @@ public class MemberFinderImpl implements MemberFinder {
                     String groupName = member.getSpec().getGroupName();
                     return groupName == null || !knownGroupNames.contains(groupName);
                 })
-                .sorted(this::compareMemberPriorityDesc)
+                .sorted(this::compareMemberOrder)
                 .toList();
             if (!ungroupedMembers.isEmpty()) {
                 allGroups.add(createVirtualGroup("ungrouped", "未分组", ungroupedMembers));
@@ -144,7 +144,7 @@ public class MemberFinderImpl implements MemberFinder {
 
         return getAllApprovedMembers()
             .map(members -> {
-                members.sort(this::compareMemberPriorityDesc);
+                members.sort(this::compareMemberOrder);
                 int total = members.size();
                 List<MemberVo> pageItems = paginate(members, normalizedPage, normalizedSize);
                 ListResult<MemberVo> result = new ListResult<>(
@@ -174,12 +174,7 @@ public class MemberFinderImpl implements MemberFinder {
             .filter(member -> "APPROVED".equals(member.getSpec().getStatus())
                 && groupName.equals(member.getSpec().getGroupName()))
             .sort((m1, m2) -> {
-                Integer p1 = m1.getSpec().getPriority();
-                Integer p2 = m2.getSpec().getPriority();
-                if (p1 == null && p2 == null) return 0;
-                if (p1 == null) return 1;
-                if (p2 == null) return -1;
-                return p2.compareTo(p1); // 降序
+                return compareMemberOrder(MemberVo.from(m1), MemberVo.from(m2));
             })
             .map(MemberVo::from)
             .collectList()
@@ -258,19 +253,23 @@ public class MemberFinderImpl implements MemberFinder {
         log.debug("已清除分组缓存: {}", groupName);
     }
 
-    private int compareMemberPriorityDesc(MemberVo m1, MemberVo m2) {
-        Integer p1 = m1.getSpec().getPriority();
-        Integer p2 = m2.getSpec().getPriority();
-        if (p1 == null && p2 == null) {
-            return 0;
+    private int compareMemberOrder(MemberVo m1, MemberVo m2) {
+        var first = m1.getMetadata().getCreationTimestamp();
+        var second = m2.getMetadata().getCreationTimestamp();
+        if (first == null && second != null) return 1;
+        if (first != null && second == null) return -1;
+        if (first != null && second != null) {
+            int byTime = second.compareTo(first);
+            if (byTime != 0) return byTime;
         }
-        if (p1 == null) {
-            return 1;
-        }
-        if (p2 == null) {
-            return -1;
-        }
-        return p2.compareTo(p1);
+        String firstName = m1.getSpec() == null || m1.getSpec().getDisplayName() == null
+            ? "" : m1.getSpec().getDisplayName();
+        String secondName = m2.getSpec() == null || m2.getSpec().getDisplayName() == null
+            ? "" : m2.getSpec().getDisplayName();
+        int byName = String.CASE_INSENSITIVE_ORDER.compare(firstName, secondName);
+        if (byName != 0) return byName;
+        return String.CASE_INSENSITIVE_ORDER.compare(
+            m1.getMetadata().getName(), m2.getMetadata().getName());
     }
 
     private MemberGroupVo createVirtualGroup(String name, String displayName, List<MemberVo> members) {

@@ -18,6 +18,7 @@ export interface Member {
     qqFriendLink?: string;
     groupName?: string;
     status: string;
+    /** @deprecated Legacy data only; no longer used for sorting or editing. */
     priority?: number;
     // 保留旧字段以兼容现有数据
     website?: string;
@@ -77,7 +78,8 @@ export interface MemberFormState {
   qqFriendLink: string;
   groupName: string;
   status: string;
-  priority: number;
+  /** @deprecated Legacy data only; no longer used for sorting or editing. */
+  priority?: number;
   annotations?: Record<string, string>;
 }
 

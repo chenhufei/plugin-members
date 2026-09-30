@@ -46,9 +46,9 @@ public class MemberSubmitRequestValidator {
         validateQqFriendLink(qqFriendLink);
 
         return new MemberEndpoint.MemberSubmitRequest(
-            securityService.sanitizeInput(displayName),
+            displayName,
             email,
-            securityService.sanitizeInput(school),
+            school,
             qq,
             qqFriendLink,
             groupName

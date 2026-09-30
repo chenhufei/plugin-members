@@ -136,8 +136,7 @@ public class MemberEndpoint implements CustomEndpoint {
                 }
                 log.warn("获取 QQ 信息失败: {}", error.getMessage());
                 return ServerResponse.ok()
-                    .bodyValue(new QqInfoResponse(finalQq, "", tencentAvatar(finalQq),
-                        finalQq + "@qq.com", ""));
+                    .bodyValue(fallbackQqInfo(finalQq));
             });
     }
 
@@ -152,18 +151,23 @@ public class MemberEndpoint implements CustomEndpoint {
     private QqInfoResponse requestQqInfo(String qq, String uapisToken) {
         String nickname = "";
         String region = "";
+        String email = "";
         try {
             JsonNode uapisData = uapisQqInfo(qq, uapisToken);
             if (uapisData != null) {
                 if (uapisData.has("data") && uapisData.get("data").isObject()) {
                     nickname = firstText(uapisData.get("data"), "nickname", "nick", "name", "userName");
                     region = firstText(uapisData.get("data"), "location", "province", "city");
+                    email = firstText(uapisData.get("data"), "email", "mail");
                 }
                 if (nickname.isEmpty()) {
                     nickname = firstText(uapisData, "nickname", "nick", "name", "userName");
                 }
                 if (region.isEmpty()) {
                     region = firstText(uapisData, "location", "province", "city");
+                }
+                if (email.isEmpty()) {
+                    email = firstText(uapisData, "email", "mail");
                 }
             }
         } catch (Exception e) {
@@ -176,7 +180,13 @@ public class MemberEndpoint implements CustomEndpoint {
                 nickname = tencentNickname;
             }
         }
-        return new QqInfoResponse(qq, nickname, tencentAvatar(qq), qq + "@qq.com", region);
+        boolean profileAvailable = !nickname.isEmpty() || !email.isEmpty();
+        return new QqInfoResponse(qq, nickname, tencentAvatar(qq), email, region,
+            profileAvailable, profileAvailable ? "upstream" : "no-public-profile");
+    }
+
+    static QqInfoResponse fallbackQqInfo(String qq) {
+        return new QqInfoResponse(qq, "", tencentAvatar(qq), "", "", false, "lookup-failed");
     }
 
     static boolean shouldUseQqFallback(Throwable error) {
@@ -414,5 +424,6 @@ public class MemberEndpoint implements CustomEndpoint {
     /**
      * QQ 信息代理响应
      */
-    public record QqInfoResponse(String qq, String nickname, String avatar, String email, String region) {}
+    public record QqInfoResponse(String qq, String nickname, String avatar, String email,
+        String region, boolean profileAvailable, String source) {}
 }

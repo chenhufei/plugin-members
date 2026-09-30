@@ -31,7 +31,7 @@ const handleRouteToFront = () => {
 const groupCreationModalVisible = ref(false);
 const memberImportModalVisible = ref(false);
 const selectedStatusFilter = shallowRef<string>("all");
-const selectedSortFilter = shallowRef<string>("all");
+const selectedSortFilter = shallowRef<string>("createdTime-desc");
 
 const statusFilterOptions = [
   { label: "全部", value: "all" },
@@ -41,9 +41,10 @@ const statusFilterOptions = [
 ];
 
 const sortFilterOptions = [
-  { label: "默认排序", value: "all" },
   { label: "创建时间 ↓", value: "createdTime-desc" },
   { label: "创建时间 ↑", value: "createdTime-asc" },
+  { label: "名称 A-Z", value: "name-asc" },
+  { label: "名称 Z-A", value: "name-desc" },
 ];
 
 const { data, isLoading, isFetching, refetch } = useQuery<GroupWithMembers[]>({
@@ -52,7 +53,7 @@ const { data, isLoading, isFetching, refetch } = useQuery<GroupWithMembers[]>({
     const { data: groupsData } = await membersCoreApiClient.memberGroup.list();
     const params: Record<string, unknown> = { page: 1, size: 10000 };
     if (selectedStatusFilter.value !== "all") params.status = selectedStatusFilter.value;
-    if (selectedSortFilter.value !== "all") params.sort = selectedSortFilter.value;
+    params.sort = selectedSortFilter.value;
     const { data: membersData } = await membersBatchApiClient.member.list(params);
     return groupMembers(groupsData.items || [], membersData.items || []);
   },

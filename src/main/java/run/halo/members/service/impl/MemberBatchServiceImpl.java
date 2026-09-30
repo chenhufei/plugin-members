@@ -74,20 +74,6 @@ public class MemberBatchServiceImpl implements MemberBatchService {
         });
     }
     
-    @Override
-    public Mono<BatchOperationResult> batchChangePriority(List<String> memberNames, Integer priority) {
-        if (priority == null) {
-            return Mono.just(BatchOperationResult.failed(sizeOf(memberNames), "优先级不能为空"));
-        }
-        
-        log.info("批量修改优先级: count={}, priority={}", sizeOf(memberNames), priority);
-
-        return executeBatch(memberNames, "修改成员优先级失败", member -> {
-            member.getSpec().setPriority(priority);
-            return client.update(member);
-        });
-    }
-
     private Mono<BatchOperationResult> executeBatch(List<String> memberNames, String errorMessage,
         Function<Member, Mono<?>> operation) {
         List<String> normalizedNames = normalizeMemberNames(memberNames);
@@ -158,7 +144,7 @@ public class MemberBatchServiceImpl implements MemberBatchService {
             .map(members -> {
                 StringBuilder csv = new StringBuilder();
                 // CSV 头部
-                csv.append("账号名称,邮箱,所属学校,QQ号,分组,状态,优先级,QQ加好友链接,创建时间\n");
+                csv.append("账号名称,邮箱,所属学校,QQ号,分组,状态,QQ加好友链接,创建时间\n");
                 
                 // CSV 数据行
                 DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -170,7 +156,6 @@ public class MemberBatchServiceImpl implements MemberBatchService {
                     csv.append(escapeCsv(spec.getQq())).append(",");
                     csv.append(escapeCsv(spec.getGroupName())).append(",");
                     csv.append(escapeCsv(spec.getStatus())).append(",");
-                    csv.append(spec.getPriority() != null ? String.valueOf(spec.getPriority()) : "0").append(",");
                     csv.append(escapeCsv(spec.getQqFriendLink())).append(",");
                     
                     // 修复 Instant 格式化

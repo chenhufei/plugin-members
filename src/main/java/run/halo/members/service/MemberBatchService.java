@@ -40,15 +40,6 @@ public interface MemberBatchService {
     Mono<BatchOperationResult> batchChangeGroup(List<String> memberNames, String groupName);
     
     /**
-     * 批量修改优先级
-     * 
-     * @param memberNames 成员名称列表
-     * @param priority 优先级
-     * @return 操作结果
-     */
-    Mono<BatchOperationResult> batchChangePriority(List<String> memberNames, Integer priority);
-    
-    /**
      * 导出成员数据（CSV格式）
      * 
      * @param memberNames 成员名称列表（为空则导出全部）

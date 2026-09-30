@@ -68,6 +68,19 @@ class MemberEndpointTest {
     }
 
     @Test
+    @DisplayName("QQ 查询降级时只提供头像，不伪造昵称和邮箱")
+    void testQqInfoFallbackDoesNotInventProfileData() {
+        var result = MemberEndpoint.fallbackQqInfo("12345678");
+
+        assertEquals("12345678", result.qq());
+        assertEquals("", result.nickname());
+        assertEquals("", result.email());
+        assertTrue(result.avatar().contains("12345678"));
+        assertFalse(result.profileAvailable());
+        assertEquals("lookup-failed", result.source());
+    }
+
+    @Test
     @DisplayName("公开列表分页参数必须是有界数字")
     void testPublicQueryIntegerValidation() {
         assertEquals(1, MemberPublicEndpoint.parseQueryInt("1", "page", 1, 1_000_000));
