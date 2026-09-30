@@ -25,7 +25,6 @@
   "qq": "12345678",
   "avatar": "https://q1.qlogo.cn/g?b=qq&nk=12345678&s=640",
   "qqFriendLink": "https://qm.qq.com/...",
-  "priority": 0,
   "groupName": "default-group",
   "status": "PENDING",
   "website": "",
@@ -169,7 +168,7 @@ GET /apis/api.member.plugin.halo.run/v1alpha1/members
 | `keyword` | string | 匹配名称、邮箱、学校或 QQ |
 | `status` | string | `PENDING`、`APPROVED` 或 `REJECTED` |
 | `groupName` | string | 按分组名称筛选 |
-| `sort` | string | `priority-asc`、`priority-desc`、`createdTime-asc`、`createdTime-desc`、`name-asc`、`name-desc`、`status-priority` |
+| `sort` | string | `createdTime-asc`、`createdTime-desc`、`name-asc`、`name-desc` |
 
 返回 `ListResult<MemberVo>`。
 
@@ -212,19 +211,6 @@ POST /apis/api.member.plugin.halo.run/v1alpha1/members/-/batch-change-group
 {
   "memberNames": ["member-a", "member-b"],
   "groupName": "default-group"
-}
-```
-
-### 批量调整优先级
-
-```http
-POST /apis/api.member.plugin.halo.run/v1alpha1/members/-/batch-change-priority
-```
-
-```json
-{
-  "memberNames": ["member-a", "member-b"],
-  "priority": 10
 }
 ```
 
@@ -301,7 +287,9 @@ GET /apis/api.member.plugin.halo.run/v1alpha1/members/-/statistics/overall
 - `429`：请求过于频繁
 - `500`：服务端异常
 
+QQ 信息查询在第三方接口未返回昵称或邮箱时不会伪造字段；头像可能仍使用 QQ 官方头像地址，后台应允许管理员手动补充缺失资料。
+
 ## 更新
 
-- 文档版本：`1.0.5`
+- 文档版本：`1.0.6`
 - 更新时间：`2026-05-12`

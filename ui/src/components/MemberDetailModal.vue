@@ -65,10 +65,6 @@ const reviewDescription = computed(
           <dt class=":uno: w-22 shrink-0 text-gray-500">分组</dt>
           <dd class=":uno: min-w-0 flex-1 text-gray-900">{{ groupName }}</dd>
         </div>
-        <div class=":uno: flex gap-3 px-3.5 py-2.5 text-sm">
-          <dt class=":uno: w-22 shrink-0 text-gray-500">优先级</dt>
-          <dd class=":uno: min-w-0 flex-1 text-gray-900">{{ member.spec.priority || 0 }}</dd>
-        </div>
         <div v-if="member.spec.qqFriendLink" class=":uno: flex gap-3 px-3.5 py-2.5 text-sm">
           <dt class=":uno: w-22 shrink-0 text-gray-500">QQ 加好友</dt>
           <dd class=":uno: min-w-0 flex-1 break-all">

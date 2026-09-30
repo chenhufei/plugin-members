@@ -53,10 +53,6 @@ public class MemberBatchEndpoint implements CustomEndpoint {
                 builder -> builder.operationId("BatchChangeGroup")
                     .description("批量修改分组")
                     .tag(tag))
-            .POST("members/-/batch-change-priority", this::batchChangePriority,
-                builder -> builder.operationId("BatchChangePriority")
-                    .description("批量修改优先级")
-                    .tag(tag))
             .POST("members/-/export-csv", this::exportCSV,
                 builder -> builder.operationId("ExportMembersCSV")
                     .description("导出成员数据（CSV）")
@@ -122,16 +118,6 @@ public class MemberBatchEndpoint implements CustomEndpoint {
     }
 
     /**
-     * 批量修改优先级
-     */
-    private Mono<ServerResponse> batchChangePriority(ServerRequest request) {
-        return request.bodyToMono(BatchChangePriorityRequest.class)
-            .flatMap(req -> batchService.batchChangePriority(req.memberNames(), req.priority()))
-            .flatMap(result -> ServerResponse.ok().bodyValue(result))
-            .doOnError(error -> log.error("批量修改优先级失败", error));
-    }
-
-    /**
      * 导出CSV
      */
     private Mono<ServerResponse> exportCSV(ServerRequest request) {
@@ -163,7 +149,6 @@ public class MemberBatchEndpoint implements CustomEndpoint {
     public record BatchRequest(List<String> memberNames) {}
     public record BatchApproveRequest(List<String> memberNames, boolean approved) {}
     public record BatchChangeGroupRequest(List<String> memberNames, String groupName) {}
-    public record BatchChangePriorityRequest(List<String> memberNames, Integer priority) {}
     public record ExportRequest(List<String> memberNames) {}
 
     private int queryInt(ServerRequest request, String name, int defaultValue) {

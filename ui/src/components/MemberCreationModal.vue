@@ -21,10 +21,6 @@ const modal = useTemplateRef<InstanceType<typeof VModal> | null>("modal");
 
 const { mutate, isPending } = useMutation({
   mutationFn: async (data: MemberFormState) => {
-    // Query max priority
-    const { data: memberList } = await membersCoreApiClient.member.list({ page: 1, size: 1 });
-    const maxPriority = (memberList.items?.[0] as any)?.spec?.priority || 0;
-
     return membersCoreApiClient.member.create({
       apiVersion: "member.plugin.halo.run/v1alpha1",
       kind: "Member",
@@ -43,7 +39,6 @@ const { mutate, isPending } = useMutation({
         qqFriendLink: data.qqFriendLink,
         groupName: props.group?.metadata.name || data.groupName,
         status: data.status,
-        priority: maxPriority + 1,
       },
     });
   },
