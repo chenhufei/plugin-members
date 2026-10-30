@@ -875,7 +875,10 @@ public class MemberMcpToolProvider implements McpToolProvider {
                             .filter(member -> withinRange(member, after, before))
                             .toList();
                         int total = matched.size();
-                        int from = Math.min((page - 1) * size, total);
+                        // page 上限没有约束，(page-1)*size 在 int 下会溢出成负数，
+                        // 随后 subList(-1, ...) 直接抛 IndexOutOfBoundsException
+                        long offset = (long) (page - 1) * size;
+                        int from = (int) Math.min(Math.max(offset, 0L), total);
                         int to = Math.min(from + size, total);
                         List<Map<String, Object>> items = matched.subList(from, to).stream()
                             .map(this::memberSummary)

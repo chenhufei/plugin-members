@@ -152,15 +152,17 @@ public class MemberClaimEndpoint implements CustomEndpoint {
                 return errorResponseSync(404, "未找到该 QQ 号对应的成员");
             }
 
-            // 优先使用用户手动填写的邮箱；未填写则回退到登记邮箱或 QQ 邮箱
-            String resolvedEmail = manualEmail.isEmpty()
-                ? EmailUtils.resolveEmail(member.getSpec().getEmail(), qq)
-                : manualEmail.trim().toLowerCase();
+            // 收件地址必须是成员登记邮箱或该 QQ 号自带的 QQ 邮箱，见 claimVerificationEmail
+            String resolvedEmail = claimVerificationEmail(member, manualEmail, qq);
+            if (resolvedEmail == null) {
+                return errorResponseSync(403,
+                    "只能向该成员登记邮箱或 QQ 邮箱发送验证码，请联系管理员更正登记邮箱");
+            }
             if (resolvedEmail.isEmpty()) {
                 return errorResponseSync(409,
                     "该成员未登记邮箱，且未提供有效邮箱，无法发送验证码。");
             }
-            boolean qqMail = StringUtils.isBlank(member.getSpec().getEmail()) && manualEmail.isEmpty();
+            boolean qqMail = resolvedEmail.equals(EmailUtils.normalize(EmailUtils.resolveEmail(null, qq)));
             String verificationKey = verificationKey(resolvedEmail, qq);
 
             if (codeService.hasValidCode(verificationKey)) {
@@ -227,32 +229,29 @@ public class MemberClaimEndpoint implements CustomEndpoint {
                         }
 
                         // 邮箱验证码校验（可选）
-                        String verificationEmail;
-                        if (config.isEnableClaimEmail()) {
-                            // 用户手动填写的邮箱优先
-                            String manualEmail = body.email() == null ? "" : body.email().trim();
-                            if (!manualEmail.isEmpty()) {
-                                verificationEmail = manualEmail;
-                            } else {
-                                verificationEmail = EmailUtils.resolveEmail(null, qq);
-                            }
-                        } else {
-                            verificationEmail = "";
-                        }
-
-                        if (!verificationEmail.isEmpty() && (body.code() == null || body.code().isBlank())) {
-                            return errorResponse(400, "请输入邮箱验证码");
-                        }
-                        if (!verificationEmail.isEmpty()) {
-                            String code = body.code().trim();
-                            String verificationKey = verificationKey(verificationEmail, qq);
-                            if (!codeService.verifyCode(verificationKey, code)) {
-                                return errorResponse(400, "验证码错误或已过期");
-                            }
-                        }
-
                         return findMemberByQq(qq)
                             .flatMap(member -> {
+                                if (config.isEnableClaimEmail()) {
+                                    String manualEmail = body.email() == null ? "" : body.email().trim();
+                                    String verificationEmail = claimVerificationEmail(member, manualEmail, qq);
+                                    if (verificationEmail == null) {
+                                        return errorResponse(400,
+                                            "验证码只能发往该成员登记邮箱或 QQ 邮箱，请使用发送验证码时的邮箱");
+                                    }
+                                    if (verificationEmail.isEmpty()) {
+                                        // 以前这里「邮箱为空 → 跳过校验」，等于对无邮箱成员完全放开认领
+                                        return errorResponse(400,
+                                            "该成员未登记验证邮箱，无法完成邮箱校验，请联系管理员");
+                                    }
+                                    String code = body.code() == null ? "" : body.code().trim();
+                                    if (code.isEmpty()) {
+                                        return errorResponse(400, "请输入邮箱验证码");
+                                    }
+                                    if (!codeService.verifyCode(verificationKey(verificationEmail, qq), code)) {
+                                        return errorResponse(400, "验证码错误或已过期");
+                                    }
+                                }
+
                                 var spec = member.getSpec();
                                 if (spec.getQqFriendLink() != null && !spec.getQqFriendLink().isBlank()) {
                                     return errorResponse(409, "该成员的 QQ 链接已设置，无法重复认领");
@@ -268,8 +267,14 @@ public class MemberClaimEndpoint implements CustomEndpoint {
                                 if (!config.isAutoApproveClaim()) {
                                     spec.setStatus("PENDING");
                                     return client.update(member)
+                                        // 资料已落库：通知发不出去不能再报 500，否则用户以为失败并重复提交
                                         .flatMap(updated -> notificationReasonPublisher
-                                            .publishClaimLinkNotice(member, buildClaimUrl("")))
+                                            .publishClaimLinkNotice(member, buildClaimUrl(""))
+                                            .onErrorResume(error -> {
+                                                log.warn("认领待审通知发送失败, member: {}",
+                                                    member.getMetadata().getName(), error);
+                                                return Mono.empty();
+                                            }))
                                             .then(Mono.defer(() -> ServerResponse.ok().bodyValue(Map.of(
                                                 "success", true,
                                                 "message", "资料已提交，待管理员审核后显示"
@@ -419,6 +424,29 @@ public class MemberClaimEndpoint implements CustomEndpoint {
     private String verificationKey(String email, String qq) {
         // 与撤回验证码分命名空间：否则一次撤回验证码会挡住认领发信，也能跨流程复用
         return "claim:" + email + ":" + qq;
+    }
+
+    /**
+     * 认领验证码只允许发往「成员登记邮箱」或「该 QQ 号自带的 QQ 邮箱」。
+     *
+     * <p>发码与校验原本都把匿名请求方自填的邮箱当作 key：任何人只要知道成员公开的 QQ 号，
+     * 就能把验证码发到自己信箱、通过校验，随后改写该成员的昵称、学校、头像和 QQ 链接。
+     * 手填邮箱因此必须与成员记录一致才接受；两者都取不到时返回空串，由调用方直接拒绝，
+     * 不能再像以前那样「邮箱为空 → 跳过校验」。
+     *
+     * @return 可用于收码的规范化邮箱；空串表示成员无可用邮箱；{@code null} 表示不接受该手填邮箱
+     */
+    static String claimVerificationEmail(Member member, String manualEmail, String qq) {
+        String registered = EmailUtils.normalize(member.getSpec().getEmail());
+        String qqMail = EmailUtils.normalize(EmailUtils.resolveEmail(null, qq));
+        String manual = EmailUtils.normalize(manualEmail);
+        if (manual.isEmpty()) {
+            return registered.isEmpty() ? qqMail : registered;
+        }
+        if (manual.equals(registered) || (!qqMail.isEmpty() && manual.equals(qqMail))) {
+            return manual;
+        }
+        return null;
     }
 
     private void publishClaimCode(Member member, String email, String code) {

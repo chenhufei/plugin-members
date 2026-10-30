@@ -28,6 +28,8 @@ public class RateLimitService {
     private static final int DEFAULT_MAX_REQUESTS = 10;
     private static final int MAX_REQUESTS_LIMIT = 1000;
     private static final int MAX_TRACKED_CLIENTS = 10_000;
+    /** 触发淘汰时一次清掉的条目数，用于把排序开销摊薄到多个请求上 */
+    private static final int PRUNE_BATCH = 2_000;
     private static final Duration DEFAULT_WINDOW = Duration.ofMinutes(1);
     
     /**
@@ -102,7 +104,11 @@ public class RateLimitService {
         if (requestWindows.size() < MAX_TRACKED_CLIENTS) {
             return;
         }
-        int removeCount = requestWindows.size() - MAX_TRACKED_CLIENTS + 1;
+        // 一次性清到低水位：原来每次只淘汰 1 条，表满之后每个请求都要做一次全量排序
+        // （1 万条 × 每次请求），等于把限流本身变成 CPU 放大器。批量淘汰后，
+        // 排序大约每 PRUNE_BATCH 个新客户端才发生一次。
+        int target = MAX_TRACKED_CLIENTS - PRUNE_BATCH;
+        int removeCount = requestWindows.size() - target;
         requestWindows.entrySet().stream()
             .sorted(Comparator.comparing(entry -> entry.getValue().windowStart()))
             .limit(removeCount)

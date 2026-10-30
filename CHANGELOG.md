@@ -1,5 +1,33 @@
 # 更新日志
 
+## [1.14.5] - 2026-10-31
+
+### Security
+- **认领验证码收件地址归属校验**：发码与校验原本都把匿名请求方自填的邮箱当作验证码 key，
+  任何人只要知道成员公开的 QQ 号，就能把验证码发到自己信箱、通过校验，随后改写该成员的
+  昵称、学校、头像与 QQ 链接。现在只接受「成员登记邮箱」或该 QQ 号自带的 `<QQ号>@qq.com`，
+  其余邮箱一律拒绝，并提示联系管理员更正登记邮箱。
+- **堵住免验证认领通道**：开启邮箱校验但成员无可用邮箱时，原逻辑把验证码键置空并整段跳过校验，
+  等于对这类成员完全放开认领；现在直接拒绝，不再存在「无邮箱 = 免验证」。
+- **空心头像内存放大**：`AvatarUtils` 改为只解析图片头读取尺寸，不再 `ImageIO.read` 整幅解码。
+  一张声明 30000×30000 的小体积 PNG 之前可让匿名认领接口分配数 GB 像素缓冲。
+- **验证码可并发复用**：`VerificationCodeService.verifyCode` 的「读取 + 删除」合并为单次原子
+  `computeIfPresent`，并改用常量时间比较，避免同一验证码被两个并发请求各用一次。
+
+### Fixed
+- 深分页 `(page-1)*size` 在 int 下溢出为负数，`subList` 抛 `IndexOutOfBoundsException`；
+  `MemberQueryService` 与 MCP `search_advanced` 两处改用 long 计算并夹取。
+- 限流表满（1 万条）后每个请求都要全量排序且只淘汰 1 条；改为一次淘汰到低水位，
+  排序开销摊薄到约每 2000 个新客户端一次。
+- 4xx 被 `Exception` 兜底成 500：新增 `ResponseStatusException` 处理器，保留真实状态码与原因。
+- 认领资料已落库但待审通知发送失败时返回 500，用户会以为提交失败而重复提交；现在仅记录警告并返回成功。
+
+### Verification
+- Java 单测 132 项通过（`cleanTest test`，0 失败 / 0 错误 / 0 跳过）；新增 `MemberClaimVerificationEmailTest`
+  覆盖「登记邮箱 / QQ 邮箱可通过、第三方邮箱拒绝、无可用邮箱返回空串」，`AvatarUtilsTest` 增加
+  「只有 PNG 头、声明 30000×30000」样本，验证不解码像素即拒绝。
+- Gradle 校验任务通过：`verifyVersionConsistency`、`verifySecurityContracts`、`verifyUiSourceContracts`、`verifyMcpApiNotPackaged`。
+
 ## [1.14.4] - 2026-10-30
 
 ### Added

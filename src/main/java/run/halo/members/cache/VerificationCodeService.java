@@ -1,5 +1,7 @@
 package run.halo.members.cache;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,34 +43,39 @@ public class VerificationCodeService {
     }
 
     /**
-     * 验证验证码是否正确且未过期
-     * 
+     * 验证验证码是否正确且未过期。
+     *
+     * <p>读取与删除必须是同一次原子操作：原来先 get 再 remove，两个并发请求都能读到同一条记录、
+     * 都返回 true，验证码因此可被用两次。这里用 {@code computeIfPresent} 在同一个桶锁内
+     * 完成「校验 + 作废」，并返回 null 让条目立即移除。
+     *
      * @param email 邮箱地址
      * @param code 用户输入的验证码
      * @return true 如果验证码正确且未过期
      */
     public boolean verifyCode(String email, String code) {
-        VerificationCodeEntry entry = codeStore.get(email);
-        if (entry == null) {
-            log.warn("验证码不存在");
+        if (email == null || code == null) {
             return false;
         }
-
-        if (entry.isExpired()) {
-            codeStore.remove(email);
-            log.warn("验证码已过期");
-            return false;
-        }
-
-        boolean match = entry.getCode().equals(code);
-        if (match) {
-            // 验证成功后立即删除，防止重复使用
-            codeStore.remove(email);
-            log.info("验证码验证成功");
-        } else {
+        byte[] expected = code.getBytes(StandardCharsets.UTF_8);
+        boolean[] matched = {false};
+        codeStore.computeIfPresent(email, (key, entry) -> {
+            if (entry.isExpired()) {
+                log.warn("验证码已过期");
+                return null;
+            }
+            // 常量时间比较，避免按字节提前返回泄漏验证码前缀
+            if (MessageDigest.isEqual(entry.getCode().getBytes(StandardCharsets.UTF_8), expected)) {
+                matched[0] = true;
+                return null;
+            }
             log.warn("验证码不匹配");
+            return entry;
+        });
+        if (matched[0]) {
+            log.info("验证码验证成功");
         }
-        return match;
+        return matched[0];
     }
 
     /**

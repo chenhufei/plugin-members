@@ -1,14 +1,16 @@
 package run.halo.members.utils;
 
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import org.apache.commons.lang3.StringUtils;
 
 /**
@@ -60,16 +62,34 @@ public final class AvatarUtils {
         if (bytes.length > MAX_BYTES) {
             return "头像文件过大，请重新上传";
         }
-        try {
-            BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
-            if (image == null) {
+        // 只读图片头拿尺寸，不做整幅解码：一张声明 30000×30000 的小体积 PNG
+        // 在 ImageIO.read 时会直接分配数 GB 像素缓冲，匿名接口因此可被打爆内存。
+        int width;
+        int height;
+        try (ImageInputStream stream = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+            if (stream == null) {
                 return "头像图片无法识别，请重新上传";
             }
-            if (image.getWidth() > MAX_EDGE || image.getHeight() > MAX_EDGE) {
-                return "头像尺寸不能超过 " + MAX_EDGE + "×" + MAX_EDGE + "，请重新上传";
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(stream);
+            if (!readers.hasNext()) {
+                return "头像图片无法识别，请重新上传";
             }
-        } catch (IOException error) {
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(stream, true, true);
+                width = reader.getWidth(0);
+                height = reader.getHeight(0);
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException | RuntimeException error) {
             return "头像图片无法识别，请重新上传";
+        }
+        if (width <= 0 || height <= 0) {
+            return "头像图片无法识别，请重新上传";
+        }
+        if (width > MAX_EDGE || height > MAX_EDGE) {
+            return "头像尺寸不能超过 " + MAX_EDGE + "×" + MAX_EDGE + "，请重新上传";
         }
         return null;
     }

@@ -46,7 +46,10 @@ public class MemberQueryService {
         members.sort(comparator(query.sort()));
 
         int total = members.size();
-        int fromIndex = Math.min((query.page() - 1) * query.size(), total);
+        // page 只做了「< 1 归一」，没有上限：(page-1)*size 在 int 下溢出为负数，
+        // subList(负数, ...) 会直接抛 IndexOutOfBoundsException。用 long 计算并夹到 [0, total]。
+        long offset = (long) (query.page() - 1) * query.size();
+        int fromIndex = (int) Math.min(Math.max(offset, 0L), total);
         int toIndex = Math.min(fromIndex + query.size(), total);
 
         return new ListResult<>(
