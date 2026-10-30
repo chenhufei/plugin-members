@@ -15,13 +15,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 import run.halo.app.core.extension.notification.Reason;
+import run.halo.app.core.extension.notification.Subscription;
 import run.halo.app.extension.ExtensionClient;
 import run.halo.app.extension.MetadataUtil;
 import run.halo.app.infra.ExternalLinkProcessor;
+import run.halo.app.notification.NotificationCenter;
 import run.halo.app.notification.NotificationReasonEmitter;
 import run.halo.app.notification.UserIdentity;
 import run.halo.members.service.SettingConfigMember;
+import run.halo.members.utils.EmailUtils;
 import static run.halo.members.MemberConstant.ADMIN_MEMBER_SUBMIT;
 import static run.halo.members.MemberConstant.MARK_AS_NOTIFIED;
 import static run.halo.members.MemberConstant.REVIEW_DESCRIPTION;
@@ -31,6 +35,7 @@ import static run.halo.members.MemberConstant.REVIEW_MEMBER_OFFLINE;
 import static run.halo.members.MemberConstant.REVIEW_MEMBER_SUBMIT;
 import static run.halo.members.MemberConstant.REVIEW_MEMBER_REJECT;
 import static run.halo.members.MemberConstant.USER_MEMBER_SUBMIT;
+import static run.halo.members.MemberConstant.USER_MEMBER_CLAIM_LINK;
 
 /**
  * 成员通知发布器
@@ -43,11 +48,13 @@ public class NotificationReasonPublisher {
 
     private final ExtensionClient client;
     private final SettingConfigMember settingConfigMember;
+    private final NotificationCenter notificationCenter;
     private final AdminMemberSubmitNoticeReasonPublisher adminMemberSubmitNoticeReasonPublisher;
     private final UserMemberSubmitNoticeReasonPublisher userMemberSubmitNoticeReasonPublisher;
     private final ReviewMemberSubmitNoticeReasonPublisher reviewMemberSubmitNoticeReasonPublisher;
     private final ReviewMemberRejectNoticeReasonPublisher reviewMemberRejectNoticeReasonPublisher;
     private final ReviewMemberOfflineNoticeReasonPublisher reviewMemberOfflineNoticeReasonPublisher;
+    private final ClaimLinkNoticeReasonPublisher claimLinkNoticeReasonPublisher;
 
     @Async
     @EventListener(MemberEvent.class)
@@ -144,6 +151,40 @@ public class NotificationReasonPublisher {
         return status + ":" + reviewAction + ":" + Integer.toHexString(reviewDescription.hashCode());
     }
 
+    /**
+     * 向成员发送认领链接邮件
+     *
+     * @param member 成员
+     * @param claimUrl 认领链接
+     * @return 发送结果；成员未登记邮箱或邮件通知失败时以异常信号返回，交由调用方如实上报
+     */
+    public Mono<Void> publishClaimLinkNotice(Member member, String claimUrl) {
+        String email = EmailUtils.resolveEmail(member.getSpec().getEmail(),
+            member.getSpec().getQq());
+        if (StringUtils.isEmpty(email)) {
+            return Mono.error(new NoMemberEmailException(member.getMetadata().getName()));
+        }
+        var subscriber = new Subscription.Subscriber();
+        subscriber.setName(UserIdentity.anonymousWithEmail(email).name());
+        var interestReason = new Subscription.InterestReason();
+        interestReason.setReasonType(USER_MEMBER_CLAIM_LINK);
+        interestReason.setExpression("props.email == '%s'".formatted(
+            email.replace("'", "''")));
+        return notificationCenter.subscribe(subscriber, interestReason)
+            .doOnError(error -> log.warn("订阅认领链接通知失败: {}", email, error))
+            .onErrorResume(error -> Mono.empty())
+            .then(claimLinkNoticeReasonPublisher.publishReasonBy(member, email, claimUrl));
+    }
+
+    /**
+     * 成员没有可用于接收通知的邮箱
+     */
+    public static class NoMemberEmailException extends RuntimeException {
+        public NoMemberEmailException(String memberName) {
+            super("成员 " + memberName + " 未登记邮箱，无法发送邮件");
+        }
+    }
+
     @Component
     @RequiredArgsConstructor
     @SuppressWarnings("deprecation")
@@ -165,7 +206,7 @@ public class NotificationReasonPublisher {
                 
             notificationReasonEmitter.emit(ADMIN_MEMBER_SUBMIT,
                 builder -> {
-                    var attributes = ReasonData.builder()
+                    var attributes = AdminReasonData.builder()
                         .adminUsername(adminUsername)
                         .adminEmail(adminEmail)
                         .email(spec.getEmail())
@@ -179,12 +220,13 @@ public class NotificationReasonPublisher {
                         .description(spec.getDescription() != null ? spec.getDescription() : "")
                         .build();
                     builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
+                        .author(UserIdentity.anonymousWithEmail(spec.getEmail()))
                         .subject(reasonSubject);
                 }).block();
         }
 
         @Builder
-        record ReasonData(String adminUsername, String adminEmail, String email, String displayName, String school,
+        record AdminReasonData(String adminUsername, String adminEmail, String email, String displayName, String school,
                           String qq, String groupName, Boolean autoApproved,
                           String reviewUrl, String website, String description) {
         }
@@ -211,7 +253,7 @@ public class NotificationReasonPublisher {
                 
             notificationReasonEmitter.emit(USER_MEMBER_SUBMIT,
                 builder -> {
-                    var attributes = ReasonData.builder()
+                    var attributes = UserReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
                         .school(spec.getSchool())
@@ -226,7 +268,7 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String school, String qq,
+        record UserReasonData(String email, String displayName, String school, String qq,
                           String groupName, String memberUrl) {
         }
     }
@@ -254,7 +296,7 @@ public class NotificationReasonPublisher {
                 
             notificationReasonEmitter.emit(REVIEW_MEMBER_SUBMIT,
                 builder -> {
-                    var attributes = ReasonData.builder()
+                    var attributes = ReviewSubmitReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
                         .school(spec.getSchool())
@@ -271,7 +313,7 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String school, String qq, String groupName,
+        record ReviewSubmitReasonData(String email, String displayName, String school, String qq, String groupName,
                           String reviewDescription, Boolean approved, String memberUrl) {
         }
     }
@@ -299,7 +341,7 @@ public class NotificationReasonPublisher {
                 
             notificationReasonEmitter.emit(REVIEW_MEMBER_REJECT,
                 builder -> {
-                    var attributes = ReasonData.builder()
+                    var attributes = ReviewRejectReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
                         .school(spec.getSchool())
@@ -315,7 +357,7 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String school, String qq, String groupName,
+        record ReviewRejectReasonData(String email, String displayName, String school, String qq, String groupName,
                           String reviewDescription, String memberUrl) {
         }
     }
@@ -344,7 +386,7 @@ public class NotificationReasonPublisher {
 
             notificationReasonEmitter.emit(REVIEW_MEMBER_OFFLINE,
                 builder -> {
-                    var attributes = ReasonData.builder()
+                    var attributes = ReviewOfflineReasonData.builder()
                         .email(email)
                         .displayName(spec.getDisplayName())
                         .school(spec.getSchool())
@@ -360,8 +402,48 @@ public class NotificationReasonPublisher {
         }
 
         @Builder
-        record ReasonData(String email, String displayName, String school, String qq, String groupName,
+        record ReviewOfflineReasonData(String email, String displayName, String school, String qq, String groupName,
                           String offlineReason, String memberUrl) {
+        }
+    }
+
+    @Component
+    @RequiredArgsConstructor
+    @SuppressWarnings("deprecation")
+    static class ClaimLinkNoticeReasonPublisher {
+        private final NotificationReasonEmitter notificationReasonEmitter;
+        private final ExternalLinkProcessor externalLinkProcessor;
+
+        public Mono<Void> publishReasonBy(Member member, String email, String claimUrl) {
+            var spec = member.getSpec();
+            String url = externalLinkProcessor.processLink("/members");
+
+            var reasonSubject = Reason.Subject.builder()
+                .apiVersion(member.getApiVersion())
+                .kind(member.getKind())
+                .name(member.getMetadata().getName())
+                .title(spec.getDisplayName())
+                .url(url)
+                .build();
+
+            return notificationReasonEmitter.emit(USER_MEMBER_CLAIM_LINK,
+                builder -> {
+                    var attributes = ClaimLinkReasonData.builder()
+                        .email(email)
+                        .displayName(spec.getDisplayName())
+                        .school(spec.getSchool())
+                        .qq(spec.getQq())
+                        .claimUrl(claimUrl)
+                        .build();
+                    builder.attributes(ReasonDataConverter.toAttributeMap(attributes))
+                        .author(UserIdentity.anonymousWithEmail(email))
+                        .subject(reasonSubject);
+                });
+        }
+
+        @Builder
+        record ClaimLinkReasonData(String email, String displayName, String school, String qq,
+                          String claimUrl) {
         }
     }
 

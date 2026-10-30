@@ -1,6 +1,9 @@
 package run.halo.members.endpoint;
 
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
+
+import java.util.List;
+
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -11,8 +14,13 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
+import run.halo.app.extension.ListResult;
+import run.halo.app.extension.Metadata;
+import run.halo.app.extension.MetadataOperator;
 import run.halo.app.plugin.ApiVersion;
+import run.halo.members.Member;
 import run.halo.members.finders.MemberFinder;
+import run.halo.members.vo.MemberVo;
 
 /**
  * 成员公开查询 API 端点（无需登录）
@@ -69,6 +77,7 @@ public class MemberPublicEndpoint implements CustomEndpoint {
         }
         return memberFinder.listApprovedMemberList(page, size)
             .doOnSuccess(result -> log.debug("返回公开成员列表，共 {} 个成员", result.getTotal()))
+            .map(MemberPublicEndpoint::toPublicView)
             .flatMap(result -> ServerResponse.ok().bodyValue(result))
             .doOnError(error -> log.error("获取成员列表失败", error))
             .onErrorResume(error ->
@@ -123,4 +132,34 @@ public class MemberPublicEndpoint implements CustomEndpoint {
      * 错误响应
      */
     public record ErrorResponse(String message) {}
+
+    /**
+     * 匿名可读的成员视图：只保留公开展示字段，去掉邮箱、QQ 号、审核状态与内部标注。
+     */
+    static ListResult<MemberVo> toPublicView(ListResult<MemberVo> source) {
+        List<MemberVo> items = source.getItems().stream()
+            .map(MemberPublicEndpoint::toPublicView)
+            .toList();
+        return new ListResult<>(source.getPage(), source.getSize(), source.getTotal(), items);
+    }
+
+    static MemberVo toPublicView(MemberVo source) {
+        var from = source.getSpec();
+        Member.MemberSpec spec = new Member.MemberSpec();
+        spec.setStatus(null);
+        if (from != null) {
+            spec.setDisplayName(from.getDisplayName());
+            spec.setSchool(from.getSchool());
+            spec.setAvatar(from.getAvatar());
+            spec.setQqFriendLink(from.getQqFriendLink());
+            spec.setGroupName(from.getGroupName());
+        }
+        Metadata metadata = new Metadata();
+        MetadataOperator fromMetadata = source.getMetadata();
+        if (fromMetadata != null) {
+            metadata.setName(fromMetadata.getName());
+            metadata.setCreationTimestamp(fromMetadata.getCreationTimestamp());
+        }
+        return MemberVo.builder().metadata(metadata).spec(spec).build();
+    }
 }

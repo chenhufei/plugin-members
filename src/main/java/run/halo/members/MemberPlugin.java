@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import run.halo.app.extension.Scheme;
 import run.halo.app.extension.SchemeManager;
+import run.halo.app.extension.index.IndexSpecs;
 import run.halo.app.plugin.BasePlugin;
 import run.halo.app.plugin.PluginContext;
 
@@ -24,7 +25,11 @@ public class MemberPlugin extends BasePlugin {
     @Override
     public void start() {
         // 注册 Member、MemberGroup 和自助提交定时任务扩展
-        schemeManager.register(Member.class);
+        schemeManager.register(Member.class, indexSpecs -> indexSpecs.add(
+            IndexSpecs.<Member, String>single("spec.status", String.class)
+                .indexFunc(member -> member.getSpec() == null
+                    ? null : member.getSpec().getStatus())
+        ));
         schemeManager.register(MemberGroup.class);
         schemeManager.register(CronMemberSubmit.class);
     }

@@ -7,9 +7,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.time.Instant;
+import java.net.URI;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,19 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
-import run.halo.app.core.extension.notification.Reason;
 import run.halo.app.extension.ExtensionClient;
 import run.halo.app.extension.MetadataUtil;
-import run.halo.app.infra.ExternalLinkProcessor;
-import run.halo.app.notification.NotificationCenter;
-import run.halo.app.notification.NotificationReasonEmitter;
-import run.halo.app.notification.UserIdentity;
 import run.halo.app.plugin.ApiVersion;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import run.halo.members.Member;
-import run.halo.members.service.SettingConfigMember;
-import run.halo.members.finders.impl.MemberFinderImpl;
+import run.halo.members.service.MemberWithdrawReviewService;
 import static run.halo.members.MemberConstant.*;
 
 /**
@@ -44,11 +41,7 @@ import static run.halo.members.MemberConstant.*;
 public class MemberWithdrawAdminEndpoint {
 
     private final ExtensionClient client;
-    private final SettingConfigMember settingConfigMember;
-    private final MemberFinderImpl memberFinder;
-    private final NotificationReasonEmitter notificationReasonEmitter;
-    private final NotificationCenter notificationCenter;
-    private final ExternalLinkProcessor externalLinkProcessor;
+    private final MemberWithdrawReviewService withdrawReviewService;
 
     /**
      * 获取撤回申请列表
@@ -129,122 +122,46 @@ public class MemberWithdrawAdminEndpoint {
      * 批准撤回申请
      */
     @PostMapping("/-/withdraw-approve/{memberName}")
-    public Mono<ResponseEntity<Map<String, Object>>> approveWithdraw(@PathVariable String memberName) {
-        return Mono.fromCallable(() -> {
-            Optional<Member> opt = client.fetch(Member.class, memberName);
-            return opt.<ResponseEntity<Map<String, Object>>>map(
-                member -> doApproveReject(member, true, "APPROVED", "已通过"))
-                .orElseGet(() -> ResponseEntity.notFound().build());
-        }).subscribeOn(Schedulers.boundedElastic());
+    public Mono<ResponseEntity<Object>> approveWithdraw(@PathVariable String memberName) {
+        return review(memberName, true);
     }
 
     /**
      * 拒绝撤回申请
      */
     @PostMapping("/-/withdraw-reject/{memberName}")
-    public Mono<ResponseEntity<Map<String, Object>>> rejectWithdraw(@PathVariable String memberName) {
-        return Mono.fromCallable(() -> {
-            Optional<Member> opt = client.fetch(Member.class, memberName);
-            return opt.<ResponseEntity<Map<String, Object>>>map(
-                member -> doApproveReject(member, false, "REJECTED", "已拒绝"))
-                .orElseGet(() -> ResponseEntity.notFound().build());
-        }).subscribeOn(Schedulers.boundedElastic());
+    public Mono<ResponseEntity<Object>> rejectWithdraw(@PathVariable String memberName) {
+        return review(memberName, false);
     }
 
-    private ResponseEntity<Map<String, Object>> doApproveReject(Member member, boolean approved, 
-            String reviewResult, String reviewStatus) {
-        if (!"WITHDRAW_REQUESTED".equals(member.getSpec().getStatus())) {
-            return ResponseEntity.badRequest().body(Map.of(
-                "failed", true,
-                "message", "该撤回申请已处理，请刷新列表"
-            ));
-        }
-        String statusBefore = "PENDING";
-        Map<String, String> annotations = MetadataUtil.nullSafeAnnotations(member);
-        if (annotations.containsKey(WITHDRAW_STATUS_BEFORE)) {
-            statusBefore = annotations.get(WITHDRAW_STATUS_BEFORE);
-        }
-        
-        String email = member.getSpec().getEmail();
-        String displayName = member.getSpec().getDisplayName();
-        String withdrawReason = annotations.getOrDefault(WITHDRAW_REASON, "");
-        var config = settingConfigMember.getBasicConfig().block();
-        String adminEmail = config == null ? "" : StringUtils.defaultString(config.getAdminEmail());
-        String reviewedAt = Instant.now().toString();
-
-        annotations.put(WITHDRAW_REVIEW_ACTION, reviewResult);
-        annotations.put(WITHDRAW_REVIEWED_AT, reviewedAt);
-        if (approved) {
-            String reason = StringUtils.defaultIfBlank(withdrawReason, "成员主动撤回");
-            member.getSpec().setStatus("REJECTED");
-            annotations.put(REVIEW_ACTION, REVIEW_ACTION_WITHDRAW);
-            annotations.put(REVIEW_DESCRIPTION, reason);
-            annotations.put(OFFLINE_AT, reviewedAt);
-            annotations.put(OFFLINE_REASON, reason);
-            annotations.put(OFFLINE_SOURCE, "SELF_WITHDRAW");
-        } else {
-            member.getSpec().setStatus(statusBefore);
-            annotations.put(REVIEW_ACTION, REVIEW_ACTION_WITHDRAW_REJECT);
-        }
-        
-        client.update(member);
-        memberFinder.evictCache();
-
-        // 发送通知给用户
-        if (config != null && config.isSendEmail()) {
-            publishWithdrawReviewNotice(member, email, displayName, adminEmail, reviewResult,
-                reviewStatus, approved ? "已下架" : statusBefore, withdrawReason);
-        }
-
-        String action = approved ? "批准" : "拒绝";
-        return ResponseEntity.ok(Map.of(
-            "failed", false,
-            "message", approved
-                ? "撤回申请已批准，成员已下架"
-                : "撤回申请已" + action + "，成员状态已恢复为" + statusBefore
-        ));
+    private Mono<ResponseEntity<Object>> review(String memberName, boolean approved) {
+        return withdrawReviewService.review(memberName, approved)
+            .<ResponseEntity<Object>>map(result -> ResponseEntity.ok(Map.of(
+                "failed", false,
+                "message", result.message())))
+            .onErrorResume(MemberWithdrawReviewService.MemberNotFoundException.class,
+                error -> Mono.just(memberNotFound(memberName)))
+            .onErrorResume(MemberWithdrawReviewService.AlreadyReviewedException.class,
+                error -> Mono.just(withdrawAlreadyReviewed()));
     }
 
-    /**
-     * 发布撤回审核结果通知给用户
-     */
-    private void publishWithdrawReviewNotice(Member member, String email, String displayName, 
-            String adminEmail, String reviewResult, String reviewStatus, String statusBefore, String withdrawReason) {
-        if (StringUtils.isEmpty(email)) {
-            return;
-        }
+    private ResponseEntity<Object> memberNotFound(String memberName) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND,
+            "成员 " + memberName + " 不存在");
+        problem.setType(URI.create("https://halo.run/probs/member-not-found"));
+        problem.setTitle("成员不存在");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problem);
+    }
 
-        String url = externalLinkProcessor.processLink("/members");
-        var reasonSubject = Reason.Subject.builder()
-            .apiVersion(member.getApiVersion())
-            .kind(member.getKind())
-            .name(member.getMetadata().getName())
-            .title(displayName)
-            .url(url)
-            .build();
-        
-        Map<String, Object> attrs = new HashMap<>();
-        attrs.put("adminEmail", adminEmail);
-        attrs.put("email", email);
-        attrs.put("displayName", displayName);
-        attrs.put("reviewResult", reviewResult);
-        attrs.put("reviewStatus", reviewStatus);
-        attrs.put("status", statusBefore);
-        attrs.put("withdrawReason", withdrawReason);
-        attrs.put("reviewUrl", url);
-        
-        // 注册订阅：让 plugin-mail-template 能匹配到这个 reason
-        var interestReason = new run.halo.app.core.extension.notification.Subscription.InterestReason();
-        interestReason.setReasonType(USER_MEMBER_WITHDRAW_REVIEW);
-        interestReason.setExpression("props.email == '%s'".formatted(email.replace("'", "''")));
-        var subscriber = new run.halo.app.core.extension.notification.Subscription.Subscriber();
-        subscriber.setName(UserIdentity.anonymousWithEmail(email).name());
-        notificationCenter.subscribe(subscriber, interestReason).block();
-        
-        notificationReasonEmitter.emit(USER_MEMBER_WITHDRAW_REVIEW,
-            builder -> builder.attributes(attrs)
-                .author(UserIdentity.anonymousWithEmail(email))
-                .subject(reasonSubject)
-            ).block();
+    private ResponseEntity<Object> withdrawAlreadyReviewed() {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+            "该撤回申请已处理，请刷新列表");
+        problem.setType(URI.create("https://halo.run/probs/withdraw-already-reviewed"));
+        problem.setTitle("撤回申请已处理");
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problem);
     }
 }

@@ -79,6 +79,16 @@ public enum MemberConstant {
     public static final String USER_MEMBER_WITHDRAW_CODE = "user-member-withdraw-code";
 
     /**
+     * 通知：向成员发送认领链接
+     */
+    public static final String USER_MEMBER_CLAIM_LINK = "user-member-claim-link";
+
+    /**
+     * 通知：认领验证码
+     */
+    public static final String USER_MEMBER_CLAIM_CODE = "user-member-claim-code";
+
+    /**
      * 最终保护器：用于标记成员撤回申请已处理
      */
     public static final String WITHDRAW_FINALIZER_NAME = "member.plugin.halo.run/withdraw-finalizer";

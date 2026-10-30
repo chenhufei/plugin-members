@@ -94,6 +94,15 @@ public class VerificationCodeService {
         return String.format("%06d", code);
     }
 
+    /**
+     * 作废验证码。邮件发送失败时必须回滚，否则残留的有效验证码会让用户在有效期内无法重试。
+     *
+     * @param email 邮箱地址（作为验证码的key）
+     */
+    public void invalidate(String email) {
+        codeStore.remove(email);
+    }
+
     public void cleanup() {
         codeStore.entrySet().removeIf(entry -> entry.getValue().isExpired());
     }

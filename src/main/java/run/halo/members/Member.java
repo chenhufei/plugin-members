@@ -53,6 +53,12 @@ public class Member extends AbstractExtension {
         @Schema(description = "审核状态: PENDING(待审核), APPROVED(已通过), REJECTED(已拒绝), WITHDRAW_REQUESTED(申请撤回中)")
         private String status = "PENDING";
 
+        @Schema(description = "加入时间（ISO-8601），由管理员自定义；为空时回退到创建时间")
+        private String joinedAt;
+
+        @Schema(description = "记录来源: FORM(前台自助提交), CONSOLE(后台创建), 历史数据为空")
+        private String origin;
+
         // 保留旧字段以兼容现有数据
         @Schema(description = "个人网站（已废弃）")
         @Deprecated

@@ -32,7 +32,10 @@
           : '成员接口响应解析失败');
       }
       if (!response.ok) {
-        throw new Error(data && (data.message || data.detail) || ('HTTP ' + response.status));
+        var failure = new Error(data && (data.message || data.detail) || ('HTTP ' + response.status));
+        failure.status = response.status;
+        failure.problemType = (data && data.type) || '';
+        throw failure;
       }
       return data;
     });
@@ -44,6 +47,13 @@
   let submitBtn = null;
   let groupSelect = null;
   let groupsLoaded = false;
+  let captchaRow = null;
+  let captchaImage = null;
+  let captchaInput = null;
+  let captchaHint = null;
+  let captchaChallengeId = '';
+  let captchaRequired = false;
+  let captchaLoading = false;
 
   function createModal() {
     const html = `
@@ -60,11 +70,7 @@
           <form id="memberApplyForm" class="member-apply-widget-modal-form" onsubmit="return false">
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-qq">QQ 号 <span class="member-apply-widget-form-req">*</span></label>
-              <div class="member-apply-widget-qq-row">
-                <input class="member-apply-widget-form-input" id="ma-qq" name="qq" type="text" required pattern="\\d{5,12}" placeholder="5-12 位数字，填写后自动获取昵称" />
-                <button type="button" class="member-apply-widget-btn-mini" id="ma-fetchQq" onclick="MemberApplyWidget.fetchQqInfo()">获取信息</button>
-              </div>
-              <div class="member-apply-widget-form-hint" id="ma-qqHint">填写 QQ 号后点击「获取信息」，自动填充昵称与默认邮箱。</div>
+              <input class="member-apply-widget-form-input" id="ma-qq" name="qq" type="text" required pattern="\\d{5,12}" placeholder="5-12 位数字" />
             </div>
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-displayName">账号名称 <span class="member-apply-widget-form-req">*</span></label>
@@ -73,6 +79,11 @@
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label" for="ma-school">学校 <span class="member-apply-widget-form-req">*</span></label>
               <input class="member-apply-widget-form-input" id="ma-school" name="school" type="text" required placeholder="所在学校全称" />
+            </div>
+            <div class="member-apply-widget-form-row">
+              <label class="member-apply-widget-form-label" for="ma-email">邮箱 <span class="member-apply-widget-form-req">*</span></label>
+              <input class="member-apply-widget-form-input" id="ma-email" name="email" type="email" required maxlength="254" autocomplete="email" placeholder="用于接收审核结果通知" />
+              <div class="member-apply-widget-form-hint">请填写常用邮箱：申请受理、审核通过／未通过和 QQ 链接补全通知都会发到这个地址，请勿使用临时邮箱。邮箱仅管理员可见。</div>
             </div>
             <div class="member-apply-widget-form-row">
               <label class="member-apply-widget-form-label">QQ 好友链接（上传二维码自动解析）</label>
@@ -88,6 +99,17 @@
               <select class="member-apply-widget-form-input" id="ma-groupName" name="groupName" required>
                 <option value="">加载中...</option>
               </select>
+              <div class="member-apply-widget-form-hint" id="ma-groupHint"></div>
+            </div>
+            <div class="member-apply-widget-form-row" id="ma-captchaRow" hidden>
+              <label class="member-apply-widget-form-label" for="ma-captchaCode">图形验证码 <span class="member-apply-widget-form-req">*</span></label>
+              <div class="member-apply-widget-captcha-row">
+                <input class="member-apply-widget-form-input" id="ma-captchaCode" name="captchaCode" type="text" maxlength="5" autocomplete="off" spellcheck="false" placeholder="5 位字符" />
+                <button type="button" class="member-apply-widget-captcha-btn" id="ma-captchaRefresh" title="换一张验证码" aria-label="换一张验证码">
+                  <img id="ma-captchaImage" alt="图形验证码" width="160" height="48" />
+                </button>
+              </div>
+              <div class="member-apply-widget-form-hint" id="ma-captchaHint">点击图片可以换一张验证码。</div>
             </div>
             <div class="member-apply-widget-form-tip" id="ma-tip"></div>
             <div class="member-apply-widget-modal-footer">
@@ -185,6 +207,34 @@
           display: flex;
           flex-direction: column;
           gap: 6px;
+        }
+
+        .member-apply-widget-form-row[hidden] {
+          display: none;
+        }
+
+        .member-apply-widget-captcha-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .member-apply-widget-captcha-btn {
+          flex: 0 0 auto;
+          padding: 0;
+          border: 1px solid var(--member-apply-widget-border-color);
+          border-radius: var(--member-apply-widget-radius-sm);
+          background: var(--member-apply-widget-bg-primary);
+          line-height: 0;
+          cursor: pointer;
+        }
+
+        .member-apply-widget-captcha-btn:hover { opacity: 0.88; }
+
+        .member-apply-widget-captcha-btn img {
+          display: block;
+          width: 160px;
+          height: 48px;
         }
 
         .member-apply-widget-form-label {
@@ -312,6 +362,10 @@
           .member-apply-widget-qq-row {
             flex-direction: column;
           }
+          .member-apply-widget-captcha-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
         }
       </style>
     `;
@@ -324,12 +378,20 @@
     tip = document.getElementById('ma-tip');
     submitBtn = document.getElementById('ma-submit');
     groupSelect = document.getElementById('ma-groupName');
+    captchaRow = document.getElementById('ma-captchaRow');
+    captchaImage = document.getElementById('ma-captchaImage');
+    captchaInput = document.getElementById('ma-captchaCode');
+    captchaHint = document.getElementById('ma-captchaHint');
+    var captchaRefresh = document.getElementById('ma-captchaRefresh');
+    if (captchaRefresh) {
+      captchaRefresh.addEventListener('click', function() { loadCaptcha(true); });
+    }
   }
 
   function loadGroups() {
     if (groupsLoaded) return;
     fetch(API_BASE + '/membergroups', {
-      credentials: 'same-origin',
+      credentials: 'omit',
       headers: { 'Accept': 'application/json' },
       cache: 'no-store'
     })
@@ -340,7 +402,6 @@
           groupSelect.innerHTML = '<option value="">暂无可申请的分组</option>';
           return;
         }
-        groupsData = groups; // 存储分组数据
         groups.forEach(function(g) {
           var opt = document.createElement('option');
           opt.value = g.metadata.name;
@@ -352,6 +413,57 @@
       .catch(function(err) {
         groupSelect.innerHTML = '<option value="">分组加载失败</option>';
         showTip('分组列表加载失败：' + err.message, 'error');
+      });
+  }
+
+  function setCaptchaHint(msg, type) {
+    if (!captchaHint) return;
+    captchaHint.className = 'member-apply-widget-form-hint' + (type ? ' is-' + type : '');
+    captchaHint.textContent = msg;
+  }
+
+  function showCaptchaRow(visible) {
+    if (!captchaRow || !captchaInput) return;
+    captchaRow.hidden = !visible;
+    captchaInput.required = !!visible;
+    if (!visible) captchaInput.value = '';
+  }
+
+  // 验证码接口不依赖 Cookie：challengeId 由前端保存并随表单回传，服务端校验后立即失效。
+  function loadCaptcha(isRefresh) {
+    if (!captchaRow || !captchaInput || captchaLoading) return;
+    captchaLoading = true;
+    if (isRefresh) captchaInput.value = '';
+    setCaptchaHint('正在获取验证码…');
+    fetch(API_BASE + '/membersubmits/-/captcha', {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store'
+    })
+      .then(parseJsonResponse)
+      .then(function(data) {
+        captchaRequired = true;
+        captchaChallengeId = (data && data.challengeId) || '';
+        if (captchaImage) captchaImage.src = data.image;
+        showCaptchaRow(true);
+        setCaptchaHint('看不清？点击图片可以换一张。');
+      })
+      .catch(function(err) {
+        captchaChallengeId = '';
+        if (captchaImage) captchaImage.removeAttribute('src');
+        if (err.status === 403 || err.status === 404 || err.status === 405) {
+          // 站点未启用验证码，或服务端版本还没有该接口
+          captchaRequired = false;
+          showCaptchaRow(false);
+          return;
+        }
+        captchaRequired = true;
+        showCaptchaRow(true);
+        setCaptchaHint('验证码获取失败：' + err.message + '，请点击图片重试。', 'error');
+      })
+      .finally(function() {
+        captchaLoading = false;
       });
   }
 
@@ -369,12 +481,17 @@
 
     var payload = {
       displayName: form.displayName.value.trim(),
-      email: form.qq.value.trim() + '@qq.com',
+      email: form.email.value.trim(),
       school: form.school.value.trim(),
       qq: form.qq.value.trim(),
       qqFriendLink: form.qqFriendLink.value.trim() || null,
       groupName: form.groupName.value
     };
+
+    if (captchaRequired) {
+      payload.challengeId = captchaChallengeId;
+      payload.captchaCode = captchaInput.value.trim();
+    }
 
     submitBtn.disabled = true;
     submitBtn.textContent = '提交中...';
@@ -383,7 +500,7 @@
 
     fetch(API_BASE + '/membersubmits/-/submit', {
       method: 'POST',
-      credentials: 'same-origin',
+      credentials: 'omit',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(payload)
     })
@@ -394,6 +511,9 @@
       })
       .catch(function(err) {
         showTip('提交失败：' + err.message, 'error');
+        if (/invalid-member-application-captcha$/.test(err.problemType || '')) {
+          loadCaptcha(true);
+        }
       })
       .finally(function() {
         submitBtn.disabled = false;
@@ -401,163 +521,11 @@
       });
   }
 
-  // ===== QQ 号获取昵称/邮箱 =====
-  // 通过 JSONP 调用 QQ 官方公开接口获取昵称；邮箱直接拼接 {qq}@qq.com
-  function setQqHint(msg, type) {
-    var hint = document.getElementById('ma-qqHint');
+  function setGroupHint(msg, type) {
+    var hint = document.getElementById('ma-groupHint');
     if (!hint) return;
     hint.className = 'member-apply-widget-form-hint' + (type ? ' is-' + type : '');
     hint.textContent = msg;
-  }
-
-  function fetchQqInfo() {
-    var qqInput = document.getElementById('ma-qq');
-    var fetchBtn = document.getElementById('ma-fetchQq');
-    if (!qqInput || !fetchBtn) return;
-    var qq = qqInput.value.trim();
-    if (!/^\d{5,12}$/.test(qq)) {
-      setQqHint('请先填写有效的 QQ 号（5-12 位数字）。', 'error');
-      return;
-    }
-
-    fetchBtn.disabled = true;
-    fetchBtn.textContent = '获取中...';
-    setQqHint('正在获取 QQ 昵称...', '');
-
-    var done = false;
-    function cleanup(err, okHint, errHint) {
-      if (done) return;
-      done = true;
-      fetchBtn.disabled = false;
-      fetchBtn.textContent = '获取信息';
-      if (okHint) setQqHint(okHint, 'success');
-      else if (errHint) setQqHint(errHint, 'error');
-    }
-
-    // 通过插件后端代理获取 QQ 昵称，规避浏览器直接请求第三方接口的跨域(CORS)与 403 限制。
-    // 后端端点: GET /apis/api.member.plugin.halo.run/v1alpha1/qq-info?qq=
-    // 归一化响应: { qq, nickname, avatar, email }
-    var abortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timeoutId = setTimeout(function() {
-      if (abortCtrl) { try { abortCtrl.abort(); } catch (_) {} }
-      cleanup(null, null, '昵称获取超时，请手动填写或稍后重试。');
-    }, 8000);
-
-    try {
-      var url = API_BASE + '/qq-info?qq=' + encodeURIComponent(qq);
-      var fetchOpts = {
-        method: 'GET',
-        credentials: 'same-origin',
-        cache: 'no-store'
-      };
-      if (abortCtrl) fetchOpts.signal = abortCtrl.signal;
-
-      fetch(url, fetchOpts)
-        .then(function(res) {
-          return parseJsonResponse(res).then(function(data) {
-            return { ok: true, data: data };
-          });
-        })
-        .then(function(res) {
-          try {
-            clearTimeout(timeoutId);
-          } catch (_) {}
-
-          // 后端归一化响应，昵称直接取 data.nickname
-          var d = (res && res.data && typeof res.data === 'object') ? res.data : null;
-          var nickname = (d && typeof d.nickname === 'string') ? d.nickname : null;
-
-          if (nickname && typeof nickname === 'string') {
-            nickname = nickname.trim();
-            if (nickname.length > 0) {
-              var nameInput = document.getElementById('ma-displayName');
-              // 强制更新账号名称，即使已有值
-              if (nameInput) {
-                nameInput.value = nickname;
-              }
-              var schoolInput = document.getElementById('ma-school');
-              if (schoolInput && !schoolInput.value) {
-                var match = nickname.match(/(.+?(?:大学|学院|学校|中学|小学))/);
-                if (match) {
-                  schoolInput.value = match[0].trim();
-                }
-              }
-              // 自动填入 QQ 邮箱 (界面已隐藏该字段，这里为了逻辑完整性可省略或保留仅作为状态)
-              cleanup(null, '已自动填入 QQ 昵称和邮箱。', null);
-              // 尝试自动选择分组
-              autoSelectGroup({ nickname: nickname });
-              return;
-            }
-          }
-          // 未获取到昵称
-          var reason = (d && (d.message || d.msg)) ? '：' + (d.message || d.msg) : '';
-          cleanup(null, null, '未获取到昵称' + reason + '，请手动填写。');
-        })
-        .catch(function(err) {
-          try { clearTimeout(timeoutId); } catch (_) {}
-          cleanup(null, null, (err && err.message ? err.message : '获取信息失败') + '，请手动填写昵称。');
-        });
-    } catch (e) {
-      try { clearTimeout(timeoutId); } catch (_) {}
-      cleanup(null, null, '获取信息失败，请手动填写昵称。');
-    }
-  }
-
-  function syncEmail() {
-    // 邮箱字段已移除，此函数置空或保留做兼容
-  }
-
-  function fillQqNickname() {
-    var qqInput = document.getElementById('ma-qq');
-    var nameInput = document.getElementById('ma-displayName');
-    if (!qqInput || !nameInput) return;
-    var qq = qqInput.value.trim();
-    if (!/^\d{5,12}$/.test(qq)) {
-      setQqHint('请先填写有效的 QQ 号（5-12 位数字）。', 'error');
-      return;
-    }
-
-    // 调用获取QQ信息接口
-    var btn = document.getElementById('ma-qqNicknameBtn');
-    btn.disabled = true;
-    btn.textContent = '获取中...';
-
-    fetch(API_BASE + '/qq-info?qq=' + encodeURIComponent(qq), {
-      method: 'GET',
-      credentials: 'same-origin',
-      cache: 'no-store'
-    })
-      .then(function(res) {
-        return parseJsonResponse(res).then(function(data) {
-          return { ok: true, data: data };
-        });
-      })
-      .then(function(res) {
-        btn.disabled = false;
-        btn.textContent = 'QQ昵称';
-
-        if (res.ok && res.data && res.data.nickname) {
-          nameInput.value = res.data.nickname.trim();
-          var schoolInput = document.getElementById('ma-school');
-          if (schoolInput && !schoolInput.value) {
-            var match = res.data.nickname.match(/(.+?(?:大学|学院|学校|中学|小学))/);
-            if (match) {
-              schoolInput.value = match[0].trim();
-            }
-          }
-          setQqHint('已填入 QQ 昵称。', 'success');
-          // 尝试自动选择分组
-          autoSelectGroup(res.data);
-        } else {
-          var reason = (res.data && res.data.message) ? '：' + res.data.message : '';
-          setQqHint('未获取到昵称' + reason + '，请手动填写。', 'error');
-        }
-      })
-      .catch(function(err) {
-        btn.disabled = false;
-        btn.textContent = 'QQ昵称';
-        setQqHint((err && err.message ? err.message : '获取昵称失败') + '，请手动填写。', 'error');
-      });
   }
 
   // 地区关键字映射
@@ -598,10 +566,9 @@
     '澳门': ['澳门', 'Macau', 'MO']
   };
 
-  var groupsData = [];
   var lastSchoolValue = '';
 
-  function autoSelectGroup(qqData) {
+  function autoSelectGroup() {
     if (!groupSelect || !groupSelect.options || groupSelect.options.length === 0) return;
 
     var region = null;
@@ -623,44 +590,39 @@
 
         if (school && (school.toLowerCase().indexOf(gName) !== -1 || gName.indexOf(school.toLowerCase()) !== -1)) {
           groupSelect.selectedIndex = i;
-          setQqHint('已自动选择分组：' + option.textContent, 'success');
+          setGroupHint('已自动选择分组：' + option.textContent, 'success');
           return;
         }
         if (name && (name.toLowerCase().indexOf(gName) !== -1 || gName.indexOf(name.toLowerCase()) !== -1)) {
           groupSelect.selectedIndex = i;
-          setQqHint('已自动选择分组：' + option.textContent, 'success');
+          setGroupHint('已自动选择分组：' + option.textContent, 'success');
           return;
         }
       }
     }
 
-    // 2. 优先从QQ数据获取IP地区
-    if (qqData && qqData.region) {
-      region = qqData.region;
-    }
-
-    // 3. 从学校名称判断地区
+    // 2. 从学校名称判断地区
     if (!region && school) {
       region = detectRegion(school);
     }
 
-    // 4. 从账号名称判断地区
+    // 3. 从账号名称判断地区
     if (!region && name) {
       region = detectRegion(name);
     }
 
-    // 5. 如果检测到地区，自动选择对应的分组
+    // 4. 如果检测到地区，自动选择对应的分组
     if (region) {
       if (selectGroupByRegion(region)) return;
     }
 
-    // 6. 如果都没匹配上，尝试选择"其他"、"全国"、"默认"或第一个有效分组
+    // 5. 如果都没匹配上，尝试选择"其他"、"全国"、"默认"或第一个有效分组
     for (var j = 0; j < groupSelect.options.length; j++) {
       var opt = groupSelect.options[j];
       var optName = (opt.textContent || opt.value).toLowerCase();
       if (optName.indexOf('其他') !== -1 || optName.indexOf('全国') !== -1 || optName.indexOf('默认') !== -1 || optName.indexOf('未知') !== -1) {
         groupSelect.selectedIndex = j;
-        setQqHint('已自动选择分组：' + opt.textContent, 'success');
+        setGroupHint('已自动选择分组：' + opt.textContent, 'success');
         return;
       }
     }
@@ -668,7 +630,7 @@
     // 兜底：如果没选上，默认选第一个
     if (groupSelect.selectedIndex === -1 && groupSelect.options.length > 0) {
       groupSelect.selectedIndex = 0;
-      setQqHint('已自动选择分组：' + groupSelect.options[0].textContent, 'success');
+      setGroupHint('已自动选择分组：' + groupSelect.options[0].textContent, 'success');
     }
   }
 
@@ -687,7 +649,7 @@
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(function() {
         if (value && value.length >= 2) {
-          autoSelectGroup({});
+          autoSelectGroup();
         }
       }, 500);
     });
@@ -716,7 +678,7 @@
       // 检查分组名是否包含地区名
       if (groupName.indexOf(regionLower) !== -1) {
         groupSelect.selectedIndex = i;
-        setQqHint('已自动选择分组：' + option.textContent, 'success');
+        setGroupHint('已自动选择分组：' + option.textContent, 'success');
         return true;
       }
     }
@@ -803,20 +765,19 @@
         tip.className = 'member-apply-widget-form-tip';
         tip.textContent = '';
       }
-      // 重置 QQ 提示
-      var qqHint = document.getElementById('ma-qqHint');
-      if (qqHint) {
-        qqHint.className = 'member-apply-widget-form-hint';
-        qqHint.textContent = '填写 QQ 号后点击「获取信息」，自动获取昵称。';
-      }
+      setGroupHint('', '');
       var qrHint = document.getElementById('ma-qrHint');
       if (qrHint) {
         qrHint.className = 'member-apply-widget-form-hint';
         qrHint.textContent = '支持上传 QQ 二维码图片，自动解析好友链接并填入。';
       }
+      captchaChallengeId = '';
+      captchaRequired = false;
+      showCaptchaRow(false);
       modal.classList.add('is-open');
       document.body.style.overflow = 'hidden';
       loadGroups();
+      loadCaptcha(false);
       setupSchoolListener(); // 设置学校输入监听
     },
 
@@ -830,10 +791,7 @@
       submitForm();
     },
 
-    fetchQqInfo: fetchQqInfo,
-    syncEmail: syncEmail,
     parseQrCode: parseQrCode,
-    fillQqNickname: fillQqNickname,
     autoSelectGroup: autoSelectGroup
   };
 

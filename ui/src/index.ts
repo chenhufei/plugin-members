@@ -1,5 +1,5 @@
 import { definePlugin } from "@halo-dev/ui-shared";
-import { IconTeam } from "@halo-dev/components";
+import TeamLineIcon from "@/components/TeamLineIcon";
 
 import { markRaw } from "vue";
 import "uno.css";
@@ -19,7 +19,7 @@ export default definePlugin({
           menu: {
             name: "成员",
             group: "content",
-            icon: markRaw(IconTeam),
+            icon: markRaw(TeamLineIcon),
             priority: 30,
             mobile: true,
           },
@@ -42,6 +42,15 @@ export default definePlugin({
         name: "MemberWithdrawals",
         redirect: "/members/submits?tab=withdrawals",
         meta: { permissions: ["plugin:members:manage"], title: "撤回审核" },
+      },
+    },
+    {
+      parentName: "Root",
+      route: {
+        path: "/members/claims",
+        name: "MemberClaims",
+        component: () => import("@/views/MemberClaimManagement.vue"),
+        meta: { permissions: ["plugin:members:manage"], title: "认领链接" },
       },
     },
   ],

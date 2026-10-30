@@ -24,6 +24,11 @@ rules:
   - apiGroups: [ "console.api.member.plugin.halo.run" ]
     resources: [ "members" ]
     verbs: [ "get", "list" ]
+  # /members/-/statistics/overall 解析为子资源 members/statistics，name 为 "-"。
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "members/statistics" ]
+    resourceNames: [ "-" ]
+    verbs: [ "get" ]
 ---
 apiVersion: v1alpha1
 kind: Role
@@ -48,6 +53,39 @@ rules:
   - apiGroups: [ "api.member.plugin.halo.run" ]
     resources: [ "members" ]
     verbs: [ "create" ]
+  # 批量与导出走 POST 子资源，Halo 解析为 members/{sub} + name "-" + verb create。
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources:
+      - "members/batch-approve"
+      - "members/batch-delete"
+      - "members/batch-change-group"
+      - "members/export-csv"
+      - "members/export-json"
+      - "members/import-csv"
+    resourceNames: [ "-" ]
+    verbs: [ "create" ]
+  - apiGroups: [ "console.api.member.plugin.halo.run" ]
+    resources: [ "members/withdraw-requests" ]
+    resourceNames: [ "-" ]
+    verbs: [ "get" ]
+  - apiGroups: [ "console.api.member.plugin.halo.run" ]
+    resources: [ "members/withdraw-approve", "members/withdraw-reject" ]
+    resourceNames: [ "-" ]
+    verbs: [ "create" ]
+  # 认领链接管理
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/claims" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "get", "list", "delete" ]
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/claims", "plugins/claims/generate", "plugins/claims/distribute" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "create" ]
+  # 信息不完善成员列表
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/incomplete-members" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "get", "list" ]
 
 ---
 
@@ -64,20 +102,27 @@ metadata:
     rbac.authorization.halo.run/display-name: "成员公开访问"
 rules:
   - apiGroups: [ "api.member.plugin.halo.run" ]
-    resources: [ "membergroups", "qq-info" ]
+    resources: [ "membergroups" ]
     verbs: [ "get", "list" ]
   - apiGroups: [ "api.member.plugin.halo.run" ]
     resources: [ "membersubmits" ]
     verbs: [ "create" ]
-  # CustomEndpoint routes are also matched as non-resource URLs by Halo's security chain.
-  - nonResourceURLs:
-      - "/apis/api.member.plugin.halo.run/v1alpha1/membergroups"
-      - "/apis/api.member.plugin.halo.run/v1alpha1/qq-info"
-      - "/apis/api.member.plugin.halo.run/v1alpha1/membersubmits/-/submit"
-      - "/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/send-verification-code"
-      - "/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/withdraw"
-    verbs: [ "get", "post" ]
+  # Halo 的 RBAC 把 /apis/{group}/{version}/{resource}/-/{sub} 解析成 resource/{sub} 子资源，
+  # 并把 HTTP 方法映射为动词（POST→create），所以必须按子资源授权，nonResourceURLs 不会命中。
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "membersubmits/submit", "membersubmits/captcha" ]
+    resourceNames: [ "-" ]
+    verbs: [ "create" ]
   - apiGroups: [ "api.plugin.halo.run" ]
     resources: [ "plugins/members" ]
     resourceNames: [ "PluginMembers" ]
-    verbs: [ "get", "list", "create" ]
+    verbs: [ "get", "list" ]
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/membersubmits" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "create" ]
+  # 自助认领：发送验证码 + 提交认领
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/claim/send-code", "plugins/claim" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "create" ]

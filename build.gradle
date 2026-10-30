@@ -6,18 +6,23 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.4.6'
+version '1.14.4'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    implementation platform('run.halo.tools.platform:plugin:2.23.0')
+    implementation platform('run.halo.tools.platform:plugin:2.27.1')
     compileOnly 'run.halo.app:api'
+
+    // MCP Server API 只能编译期依赖：运行时由 mcp-server 插件提供，打进包会造成类冲突。
+    compileOnly 'run.halo.mcpserver:api:1.3.0'
 
     testImplementation 'run.halo.app:api'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testCompileOnly 'run.halo.mcpserver:api:1.3.0'
+    testRuntimeOnly 'run.halo.mcpserver:api:1.3.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -130,19 +135,40 @@ tasks.register('verifySecurityContracts') {
     description = 'Verify anonymous API paths, read-only console access, and CSP-friendly widget entry points.'
     inputs.files(
         layout.projectDirectory.file('src/main/resources/extensions/roleTemplate.yaml'),
-        layout.projectDirectory.file('src/main/java/run/halo/members/MemberApplyWidgetFooterProcessor.java')
+        layout.projectDirectory.file('src/main/java/run/halo/members/MemberApplyWidgetFooterProcessor.java'),
+        layout.projectDirectory.file('widget/src/member-apply-widget.iife.js')
     )
     doLast {
         def roleTemplate = layout.projectDirectory
             .file('src/main/resources/extensions/roleTemplate.yaml').asFile.getText('UTF-8')
         ['console.api.member.plugin.halo.run', 'resources: [ "members" ]',
-         '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/send-verification-code',
-         '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/membersubmits/-/withdraw']
+         'resources: [ "membersubmits/submit", "membersubmits/captcha" ]',
+         'resources: [ "plugins/membersubmits" ]', 'resourceNames: [ "PluginMembers" ]',
+         'resources: [ "members/statistics" ]',
+         'resources: [ "members/withdraw-requests" ]',
+         'resources: [ "members/withdraw-approve", "members/withdraw-reject" ]',
+         '- "members/batch-approve"', '- "members/export-csv"']
             .each { marker ->
                 if (!roleTemplate.contains(marker)) {
                     throw new GradleException("Role template is missing required access contract: ${marker}")
                 }
             }
+        // Halo 把 CustomEndpoint 的 /-/xxx 解析为子资源且 POST 映射为 create，
+        // nonResourceURLs 与 "post" 动词永远不会命中，禁止再写回这种规则。
+        ['- nonResourceURLs:', 'verbs: [ "get", "post" ]'].each { marker ->
+            if (roleTemplate.contains(marker)) {
+                throw new GradleException("Role template uses an authorization rule Halo never matches: ${marker}")
+            }
+        }
+
+        def widgetSource = layout.projectDirectory
+            .file('widget/src/member-apply-widget.iife.js').asFile.getText('UTF-8')
+        if (!widgetSource.contains("credentials: 'omit'")) {
+            throw new GradleException('Member widget must submit anonymously without cookies')
+        }
+        if (widgetSource.contains("credentials: 'same-origin'")) {
+            throw new GradleException('Member widget must not send site cookies to the anonymous API')
+        }
 
         def footerProcessor = layout.projectDirectory
             .file('src/main/java/run/halo/members/MemberApplyWidgetFooterProcessor.java')
@@ -161,10 +187,30 @@ tasks.register('verifySecurityContracts') {
     }
 }
 
+tasks.register('verifyMcpApiNotPackaged') {
+    group = 'verification'
+    description = 'MCP Server API 必须只用于编译期，运行期由 mcp-server 插件提供。'
+    dependsOn('jar')
+    doLast {
+        def jarFile = tasks.jar.archiveFile.get().asFile
+        def zipFile = new java.util.zip.ZipFile(jarFile)
+        try {
+            def leaked = zipFile.entries().toList()
+                .findAll { it.name.contains('run/halo/mcpserver/') }
+                .collect { it.name }
+            if (leaked) {
+                throw new GradleException(
+                    "MCP Server API must remain compileOnly, found in JAR: ${leaked}")
+            }
+        } finally {
+            zipFile.close()
+        }
+    }
+}
+
 tasks.register('installDepsForUI', PnpmTask) {
     args = ['install', '--frozen-lockfile']
 }
-
 tasks.named('compileJava') {
     dependsOn('buildFrontend')
 }
@@ -178,10 +224,11 @@ tasks.named('check') {
     dependsOn('verifyVersionConsistency')
     dependsOn('verifyUiSourceContracts')
     dependsOn('verifySecurityContracts')
+    dependsOn('verifyMcpApiNotPackaged')
 }
 
 halo {
-    version = '2.23.0'
+    version = '2.27.1'
 }
 
 haloPlugin {
@@ -193,6 +240,7 @@ haloPlugin {
                 pathsToMatch = [
                     '/apis/member.plugin.halo.run/v1alpha1/members/**',
                     '/apis/member.plugin.halo.run/v1alpha1/membergroups/**',
+                    '/apis/api.member.plugin.halo.run/v1alpha1/**',
                     '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/**',
                     '/apis/console.api.member.plugin.halo.run/v1alpha1/**'
                 ]

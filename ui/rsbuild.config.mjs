@@ -1,4 +1,4 @@
-import { rsbuildConfig } from "@halo-dev/ui-plugin-bundler-kit";
+import { rsbuildConfig } from "@halo-dev/ui-plugin-bundler-kit/rsbuild";
 import { UnoCSSRspackPlugin } from "@unocss/webpack/rspack";
 
 const OUT_DIR_PROD = "../src/main/resources/console";

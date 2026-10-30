@@ -15,6 +15,7 @@ import reactor.core.publisher.Mono;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.members.service.MemberBatchService;
+import run.halo.members.service.MemberBatchService.BatchOperationResult;
 import run.halo.members.service.MemberQueryService;
 import run.halo.members.service.MemberQueryService.MemberQuery;
 
@@ -60,6 +61,10 @@ public class MemberBatchEndpoint implements CustomEndpoint {
             .POST("members/-/export-json", this::exportJSON,
                 builder -> builder.operationId("ExportMembersJSON")
                     .description("导出成员数据（JSON）")
+                    .tag(tag))
+            .POST("members/-/import-csv", this::importCSV,
+                builder -> builder.operationId("ImportMembersCSV")
+                    .description("从 CSV 导入成员")
                     .tag(tag))
             .build();
     }
@@ -145,11 +150,28 @@ public class MemberBatchEndpoint implements CustomEndpoint {
             .doOnError(error -> log.error("导出JSON失败", error));
     }
 
+    /**
+     * 从 CSV 导入成员
+     */
+    private Mono<ServerResponse> importCSV(ServerRequest request) {
+        return request.bodyToMono(ImportCsvRequest.class)
+            .flatMap(req -> {
+                if (req.csvData() == null || req.csvData().isBlank()) {
+                    return ServerResponse.badRequest().bodyValue(
+                        BatchOperationResult.failed(0, "CSV 数据为空"));
+                }
+                return batchService.batchImportFromCSV(req.csvData(), req.defaultGroup())
+                    .flatMap(result -> ServerResponse.ok().bodyValue(result));
+            })
+            .doOnError(error -> log.error("导入CSV失败", error));
+    }
+
     // 请求对象
     public record BatchRequest(List<String> memberNames) {}
     public record BatchApproveRequest(List<String> memberNames, boolean approved) {}
     public record BatchChangeGroupRequest(List<String> memberNames, String groupName) {}
     public record ExportRequest(List<String> memberNames) {}
+    public record ImportCsvRequest(String csvData, String defaultGroup) {}
 
     private int queryInt(ServerRequest request, String name, int defaultValue) {
         return request.queryParam(name)

@@ -39,6 +39,8 @@ const { mutate, isPending } = useMutation({
         qqFriendLink: data.qqFriendLink,
         groupName: props.group?.metadata.name || data.groupName,
         status: data.status,
+        origin: "CONSOLE",
+        joinedAt: data.joinedAt || undefined,
       },
     });
   },

@@ -1,6 +1,8 @@
 package run.halo.members.endpoint;
 
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -24,6 +26,8 @@ import run.halo.members.service.MemberStatisticsService;
 @Component
 @RequiredArgsConstructor
 public class MemberStatisticsEndpoint implements CustomEndpoint {
+
+    private static final int DEFAULT_TREND_DAYS = 30;
 
     private final MemberStatisticsService statisticsService;
 
@@ -103,22 +107,38 @@ public class MemberStatisticsEndpoint implements CustomEndpoint {
      * 获取申请趋势
      */
     private Mono<ServerResponse> getApplicationTrend(ServerRequest request) {
-        int days = request.queryParam("days")
-            .map(param -> {
-                try {
-                    int value = Integer.parseInt(param);
-                    if (value < 1 || value > 365) {
-                        throw new IllegalArgumentException("days 参数必须在 1-365 之间");
-                    }
-                    return value;
-                } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("days 参数格式不正确");
-                }
-            })
-            .orElse(30);
-        
+        final int days;
+        try {
+            days = request.queryParam("days")
+                .map(MemberStatisticsEndpoint::parseDays)
+                .orElse(DEFAULT_TREND_DAYS);
+        } catch (IllegalArgumentException e) {
+            return invalidDays(e.getMessage());
+        }
+
         return statisticsService.getApplicationTrend(days)
             .flatMap(trend -> ServerResponse.ok().bodyValue(trend))
             .doOnError(error -> log.error("获取申请趋势失败", error));
+    }
+
+    private static int parseDays(String value) {
+        int parsed;
+        try {
+            parsed = Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("days 参数格式不正确");
+        }
+        if (parsed < 1 || parsed > 365) {
+            throw new IllegalArgumentException("days 参数必须在 1-365 之间");
+        }
+        return parsed;
+    }
+
+    private Mono<ServerResponse> invalidDays(String detail) {
+        return ServerResponse.badRequest()
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .bodyValue(new MemberEndpoint.ProblemResponse(
+                "https://halo.run/probs/invalid-member-statistics-query",
+                "统计查询参数无效", HttpStatus.BAD_REQUEST.value(), detail));
     }
 }

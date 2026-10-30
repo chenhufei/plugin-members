@@ -1,86 +1,53 @@
 # Members Plugin 文档
 
-## 📚 文档目录
+- [README](../README.md) —— 介绍、安装与设置项
+- [API 文档](API.md) —— 接口分组、数据模型、匿名/公开契约、状态码与 MCP 工具
+- [主题接入指南](THEME-INTEGRATION.md) —— Finder 契约、`/members` 模板覆盖、Widget 调用与自检清单
+- [CHANGELOG](../CHANGELOG.md) —— 版本记录
+- [CONTRIBUTING](../CONTRIBUTING.md) —— 贡献与构建约定
 
-- [README](../README.md) - 项目介绍和快速开始
-- [CONTRIBUTING](../CONTRIBUTING.md) - 贡献指南
-- [API 文档](API.md) - API 接口文档
+## 按任务查找
 
-## 快速链接
-
-### 安装指南
-- [环境要求](../README.md#环境要求)
-- [安装步骤](../README.md#安装使用)
-- [开发指南](../README.md#开发指南)
-
-### 配置指南
-- [基础设置](../README.md#基础设置)
-- [邮件通知](../README.md#邮件通知)
-- [安全设置](../README.md#安全设置)
-
-### API 文档
-- [管理端点](API.md#成员-api) - 需要认证的 API
-- [公开端点](API.md#公开-api) - 无需认证的 API
-- [示例代码](API.md#示例代码) - JavaScript/TypeScript/Vue/React 示例
-
-### 主题集成
-- [推荐主题](../README.md#推荐主题)
-- [自定义集成](../README.md#自定义集成)
-- [Thymeleaf 示例](API.md#thymeleaf-集成示例)
-
-## 功能说明
-
-### 成员管理
-- 成员申请
-- 审核流程
-- 成员信息管理
-- 头像支持
-
-### 分组管理
-- 灵活分组
-- 拖拽排序
-- 权限控制
-- 批量操作
-
-### 通知系统
-- 邮件通知
-- 模板定制
-- 多语言支持
-- 通知历史
-
-### 安全防护
-- 频率限制
-- 内容过滤
-- IP 限制
-- 数据验证
+| 我要做什么 | 看哪里 |
+| --- | --- |
+| 前台展示已通过成员 | [主题接入指南 §2](THEME-INTEGRATION.md#2-模板内使用-memberfinder) |
+| 自定义 `/members` 页面 | [主题接入指南 §3](THEME-INTEGRATION.md#3-members-页面与模板覆盖) |
+| 添加申请入口按钮 | [主题接入指南 §4](THEME-INTEGRATION.md#4-申请入口-widget) |
+| 用脚本提交申请 / 处理错误码 | [API 文档 · 匿名申请 API](API.md#匿名申请-api)、[错误响应](API.md#错误响应) |
+| 在后台列表做筛选、批量、导出 | [API 文档 · 控制台成员查询 API](API.md#控制台成员查询-api)、[批量操作 API](API.md#批量操作-api) |
+| 配置验证码、限流、黑名单 | [README · 安全设置](../README.md#安全与维护) |
+| 让 AI 助手查询或审核申请 | [API 文档 · MCP 工具](API.md#mcp-工具) |
 
 ## 常见问题
 
-### Q: 如何获取 API Token？
-A: 在 Halo 后台个人设置中生成 API Token。
+**Q：匿名接口需要登录吗？**
+A：不需要。插件自带角色模板 `role-template-member-anonymous-public`，只聚合了申请分组、QQ 资料、验证码、提交、撤回与公开读取所需权限，不开放任何管理写权限。
 
-### Q: 如何自定义邮件模板？
-A: 在插件设置的"邮件通知"中编辑模板。
+**Q：公开只读接口为什么没有邮箱和 QQ？**
+A：`/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/members` 只输出展示字段，邮箱、QQ 原值、审核状态与内部注解需要走受认证的管理或控制台接口。
 
-### Q: 如何批量导入成员？
-A: 可以通过 API 批量创建成员。
+**Q：后台审核通过了，前台为什么还没更新？**
+A：前台查询有 5 分钟缓存，成员或分组变更后由调和器异步清除，通常秒级生效，最坏情况延迟一个缓存周期。
 
-### Q: 如何限制申请频率？
-A: 在插件设置的"安全设置"中配置频率限制。
+**Q：能关掉图形验证码吗？**
+A：可以。在插件设置「安全防护」中关闭「提交需要图形验证码」，旧的免验证码提交方式继续可用。
 
-## 更新日志
+**Q：撤回申请需要什么条件？**
+A：需要开启邮件通知（撤回依赖邮箱验证码），且记录状态为 `PENDING`、`APPROVED` 或 `WITHDRAW_REQUESTED`；否则接口返回 `409`。
 
-详细的版本更新记录请查看 [CHANGELOG.md](../CHANGELOG.md)
+**Q：通知模板怎么改？**
+A：插件在 `extensions/notification-templates.yaml` 注册通知模板，正文定制请使用 Halo 后台的通知模板能力或 `plugin-mail-template` 插件，插件设置里只提供开关与收件人配置。
+
+**Q：支持批量导入成员吗？**
+A：批量接口只提供审核、删除、改组与导出（CSV/JSON）。批量导入请逐个调用成员创建 API，或在控制台粘贴资料创建。
 
 ## 相关资源
 
 - [Halo 官方文档](https://docs.halo.run/)
-- [Halo 插件开发文档](https://docs.halo.run/developer-guide/plugin/introduction)
-- [Spring Boot 文档](https://spring.io/projects/spring-boot)
-- [Vue.js 文档](https://vuejs.org/)
+- [Halo 插件开发指南](https://docs.halo.run/developer-guide/plugin/introduction)
+- [Halo 主题开发指南](https://docs.halo.run/developer-guide/theme/introduction)
 
 ## 反馈与支持
 
-如有问题或建议，请：
 - 提交 [Issue](https://github.com/chenhufei/plugin-members/issues)
-- 查看 [Discussions](https://github.com/chenhufei/plugin-members/discussions)
+- 查看 [仓库](https://github.com/chenhufei/plugin-members)

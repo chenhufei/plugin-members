@@ -1,24 +1,19 @@
 package run.halo.members.endpoint;
 
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -26,13 +21,16 @@ import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
+import run.halo.members.exception.CaptchaRejectedException;
 import run.halo.members.exception.RateLimitExceededException;
+import run.halo.members.exception.DuplicateMemberException;
+import run.halo.members.exception.PendingCapacityExceededException;
 import run.halo.members.finders.MemberFinder;
 import run.halo.members.security.RateLimitService;
 import run.halo.members.security.SecurityService;
+import run.halo.members.security.captcha.MemberCaptchaService;
 import run.halo.members.service.MemberService;
 import run.halo.members.service.SettingConfigMember;
 import run.halo.members.utils.RequestUtils;
@@ -51,18 +49,12 @@ import run.halo.members.validation.ValidSchool;
 @RequiredArgsConstructor
 public class MemberEndpoint implements CustomEndpoint {
 
-    private static final HttpClient QQ_HTTP_CLIENT = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(5))
-        .followRedirects(HttpClient.Redirect.NORMAL)
-        .build();
-
-    private static final ObjectMapper QQ_OBJECT_MAPPER = new ObjectMapper();
-
     private final MemberFinder memberFinder;
     private final MemberService memberService;
     private final SettingConfigMember settingConfigMember;
     private final RateLimitService rateLimitService;
     private final SecurityService securityService;
+    private final MemberCaptchaService captchaService;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -72,9 +64,9 @@ public class MemberEndpoint implements CustomEndpoint {
                 builder -> builder.operationId("ListMemberGroups")
                     .description("List all member groups")
                     .tag(tag))
-            .GET("qq-info", this::fetchQqInfo,
-                builder -> builder.operationId("FetchQqInfo")
-                    .description("服务端代理获取 QQ 昵称信息，规避前端跨域与网络限制")
+            .POST("membersubmits/-/captcha", this::issueCaptcha,
+                builder -> builder.operationId("IssueMemberCaptcha")
+                    .description("创建一次性的成员申请图形验证码，客户端无需 Cookie")
                     .tag(tag))
             .POST("membersubmits/-/submit", this::submitMember,
                 builder -> builder.operationId("SubmitMember")
@@ -108,229 +100,33 @@ public class MemberEndpoint implements CustomEndpoint {
     }
 
     /**
-     * 服务端代理获取 QQ 昵称信息。
-     * 前端浏览器直接请求第三方接口会被 CORS 拦截并可能返回 403，
-     * 改由服务端请求 uapis.cn 接口后返回归一化结果，规避跨域与网络限制。
+     * 创建图形验证码：challengeId 与图片一次性有效，提交时随表单回传，接口不依赖 Cookie。
      */
-    private Mono<ServerResponse> fetchQqInfo(ServerRequest request) {
-        String qq = request.queryParam("qq").orElse("").trim();
-        if (!qq.matches("^\\d{5,12}$")) {
-            return ServerResponse.badRequest()
-                .bodyValue(new ErrorResponse("QQ号格式不正确"));
-        }
-        final String finalQq = qq;
+    private Mono<ServerResponse> issueCaptcha(ServerRequest request) {
         return settingConfigMember.getBasicConfig()
             .flatMap(config -> performSecurityCheck(request, config)
-                .then(performRateLimitCheck(request, config))
-                .then(Mono.fromCallable(() -> requestQqInfo(finalQq, config.getUapisToken()))
-                    .subscribeOn(Schedulers.boundedElastic())))
-            .flatMap(info -> ServerResponse.ok().bodyValue(info))
-            .onErrorResume(error -> {
-                if (!shouldUseQqFallback(error)) {
-                    if (error instanceof SecurityException) {
-                        return ServerResponse.status(403)
-                            .bodyValue(new ErrorResponse("请求被安全策略拒绝"));
-                    }
-                    return ServerResponse.status(429)
-                        .bodyValue(new ErrorResponse("请求过于频繁，请稍后再试"));
-                }
-                log.warn("获取 QQ 信息失败: {}", error.getMessage());
-                return ServerResponse.ok()
-                    .bodyValue(fallbackQqInfo(finalQq));
-            });
-    }
-
-    /**
-     * 多源兜底获取 QQ 信息：
-     * <ul>
-     *   <li>头像：直接由腾讯官方地址构造，无需任何第三方接口，永远可用。</li>
-     *   <li>昵称：优先 uapis.cn（返回干净 UTF-8），失败或为空时退回腾讯官方接口
-     *       （GBK 编码的 JSONP），保证正常账号昵称一定能取到。</li>
-     * </ul>
-     */
-    private QqInfoResponse requestQqInfo(String qq, String uapisToken) {
-        String nickname = "";
-        String region = "";
-        String email = "";
-        try {
-            JsonNode uapisData = uapisQqInfo(qq, uapisToken);
-            if (uapisData != null) {
-                if (uapisData.has("data") && uapisData.get("data").isObject()) {
-                    nickname = firstText(uapisData.get("data"), "nickname", "nick", "name", "userName");
-                    region = firstText(uapisData.get("data"), "location", "province", "city");
-                    email = firstText(uapisData.get("data"), "email", "mail");
-                }
-                if (nickname.isEmpty()) {
-                    nickname = firstText(uapisData, "nickname", "nick", "name", "userName");
-                }
-                if (region.isEmpty()) {
-                    region = firstText(uapisData, "location", "province", "city");
-                }
-                if (email.isEmpty()) {
-                    email = firstText(uapisData, "email", "mail");
-                }
-            }
-        } catch (Exception e) {
-            log.debug("uapis.cn 获取 QQ 信息失败: {}", e.getMessage());
-        }
-
-        if (nickname.isEmpty() || isGarbled(nickname)) {
-            String tencentNickname = nicknameFromTencent(qq);
-            if (!tencentNickname.isEmpty() && !isGarbled(tencentNickname)) {
-                nickname = tencentNickname;
-            }
-        }
-        boolean profileAvailable = !nickname.isEmpty() || !email.isEmpty();
-        return new QqInfoResponse(qq, nickname, tencentAvatar(qq), email, region,
-            profileAvailable, profileAvailable ? "upstream" : "no-public-profile");
-    }
-
-    static QqInfoResponse fallbackQqInfo(String qq) {
-        return new QqInfoResponse(qq, "", tencentAvatar(qq), "", "", false, "lookup-failed");
-    }
-
-    static boolean shouldUseQqFallback(Throwable error) {
-        return !(error instanceof SecurityException
-            || error instanceof RateLimitExceededException);
-    }
-
-    private boolean isGarbled(String text) {
-        if (text == null || text.isEmpty()) {
-            return false;
-        }
-        // 简单判断是否包含明显的乱码字符（如常见的 GBK 误解析生僻字）
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '\ufffd' || c == '锟' || c == '斤' || c == '拷' || c == '烫' || c == '屯' || c == '閿' || c == '熸' || c == '垝' || c == '姹' || c == '夐' || c == '敓' || c == '缁' || c == '撳' || c == '伐' || c == '枻' || c == '鎷' || c == '峰' || c == '') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 腾讯官方头像地址，无需接口调用即可直接展示
-     */
-    private static String tencentAvatar(String qq) {
-        return "https://q.qlogo.cn/g?b=qq&nk=" + qq + "&s=640";
-    }
-
-    /**
-     * 通过 uapis.cn 获取 QQ 信息节点（干净 UTF-8）；任何异常都返回 null，交由上层继续兜底
-     */
-    private JsonNode uapisQqInfo(String qq, String token) throws Exception {
-        if (token == null || token.isBlank()) {
-            return null;
-        }
-        String normalizedToken = token.trim();
-        String url = "https://uapis.cn/api/v1/social/qq/userinfo?qq="
-            + URLEncoder.encode(qq, StandardCharsets.UTF_8);
-        URI uri = URI.create(url);
-
-        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .header("Accept", "*/*")
-            .header("Authorization", "Bearer " + normalizedToken);
-
-        HttpRequest httpRequest = builder
-            .timeout(Duration.ofSeconds(8))
-            .GET()
-            .build();
-
-        HttpResponse<byte[]> response = QQ_HTTP_CLIENT.send(httpRequest,
-            HttpResponse.BodyHandlers.ofByteArray());
-        byte[] bytes = response.body();
-        if (bytes == null) {
-            return null;
-        }
-        String body = new String(bytes, StandardCharsets.UTF_8);
-        if (body.isBlank()) {
-            return null;
-        }
-        return QQ_OBJECT_MAPPER.readTree(body);
-    }
-
-    /**
-     * 通过腾讯官方 cgi_get_portrait.fcg 获取昵称。
-     * 返回形如 {@code portraitCallBack({"QQ":[avatar,...,"NICK",0]})} 的 GBK 编码 JSONP，
-     * 昵称位于数组下标 6。
-     */
-    private String nicknameFromTencent(String qq) {
-        try {
-            URI uri = URI.create(
-                "https://users.qzone.qq.com/fcg-bin/cgi_get_portrait.fcg?uins="
-                    + URLEncoder.encode(qq, StandardCharsets.UTF_8));
-            byte[] bytes = httpGetBytes(uri);
-            if (bytes == null || bytes.length == 0) {
-                return "";
-            }
-            // 腾讯接口固定返回 GBK
-            String body = new String(bytes, Charset.forName("GBK"));
-            int start = body.indexOf('(');
-            int end = body.lastIndexOf(')');
-            if (start < 0 || end <= start) {
-                return "";
-            }
-            JsonNode root = QQ_OBJECT_MAPPER.readTree(body.substring(start + 1, end));
-            JsonNode arr = root.get(qq);
-            if (arr != null && arr.isArray() && arr.size() > 6 && arr.get(6).isTextual()) {
-                return arr.get(6).asText().trim();
-            }
-            return "";
-        } catch (Exception e) {
-            log.debug("腾讯接口获取 QQ 昵称失败: {}", e.getMessage());
-            return "";
-        }
-    }
-
-    private static byte[] httpGetBytes(URI uri) throws Exception {
-        HttpRequest httpRequest = HttpRequest.newBuilder(uri)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .header("Accept", "*/*")
-            .timeout(Duration.ofSeconds(8))
-            .GET()
-            .build();
-        HttpResponse<byte[]> response = QQ_HTTP_CLIENT.send(httpRequest,
-            HttpResponse.BodyHandlers.ofByteArray());
-        return response.body();
-    }
-
-    private static String httpGetString(URI uri, Charset charset) throws Exception {
-        HttpRequest httpRequest = HttpRequest.newBuilder(uri)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .header("Accept", "*/*")
-            .timeout(Duration.ofSeconds(8))
-            .GET()
-            .build();
-        HttpResponse<byte[]> response = QQ_HTTP_CLIENT.send(httpRequest,
-            HttpResponse.BodyHandlers.ofByteArray());
-        byte[] bytes = response.body();
-        if (bytes == null) {
-            return "";
-        }
-        return new String(bytes, charset);
-    }
-
-    /**
-     * 按优先级从 JSON 节点中取第一个非空的文本字段值
-     */
-    private static String firstText(JsonNode node, String... fields) {
-        if (node == null) {
-            return "";
-        }
-        for (String field : fields) {
-            JsonNode value = node.get(field);
-            if (value != null && value.isTextual()) {
-                String text = value.asText().trim();
-                if (!text.isEmpty()) {
-                    return text;
-                }
-            }
-        }
-        return "";
+                .then(captchaService.issue(request, null))
+                .flatMap(result -> switch (result.status()) {
+                    case ISSUED -> ServerResponse.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                        .bodyValue(new CaptchaResponse(result.identifier(),
+                            "data:image/png;base64,"
+                                + Base64.getEncoder().encodeToString(result.png()),
+                            result.expiresInSeconds()));
+                    case RATE_LIMITED -> problem(HttpStatus.TOO_MANY_REQUESTS,
+                        "https://halo.run/probs/request-not-permitted",
+                        "请求过于频繁",
+                        "验证码获取过于频繁，请 " + result.retryAfterSeconds() + " 秒后重试");
+                    case UNAVAILABLE -> problem(HttpStatus.SERVICE_UNAVAILABLE,
+                        "https://halo.run/probs/member-application-unavailable",
+                        "服务暂时不可用", "验证码服务暂时不可用，请稍后重试");
+                }))
+            .onErrorResume(SecurityException.class, error ->
+                problem(HttpStatus.FORBIDDEN,
+                    "https://halo.run/probs/member-application-forbidden",
+                    "请求被拒绝", "请求被安全策略拒绝"))
+            .doOnError(error -> log.error("获取成员申请验证码失败", error));
     }
 
     /**
@@ -339,16 +135,63 @@ public class MemberEndpoint implements CustomEndpoint {
     private Mono<ServerResponse> submitMember(ServerRequest request) {
         return settingConfigMember.getBasicConfig()
             .flatMap(config -> performSecurityCheck(request, config)
-                .then(performRateLimitCheck(request, config))
+                .then(performRateLimitCheck(request, config, "submit"))
                 .then(request.bodyToMono(MemberSubmitRequest.class)
-                    .switchIfEmpty(Mono.error(new IllegalArgumentException("提交内容不能为空"))))
-            )
+                    .switchIfEmpty(Mono.error(new IllegalArgumentException("提交内容不能为空")))
+                    .flatMap(body -> requireValidCaptcha(config, body).thenReturn(body))))
             .flatMap(memberService::submitMember)
             .flatMap(member -> {
                 log.info("成员申请提交成功: {}", member.getMetadata().getName());
                 return ServerResponse.ok().bodyValue(member);
             })
+            .onErrorResume(CaptchaRejectedException.class, error ->
+                problem(HttpStatus.BAD_REQUEST,
+                    "https://halo.run/probs/invalid-member-application-captcha",
+                    "成员申请验证码无效", error.getMessage()))
+            .onErrorResume(DuplicateMemberException.class, error ->
+                problem(HttpStatus.CONFLICT,
+                    "https://halo.run/probs/duplicate-member-application",
+                    "成员申请重复", error.getMessage()))
+            .onErrorResume(PendingCapacityExceededException.class, error ->
+                problem(HttpStatus.CONFLICT,
+                    "https://halo.run/probs/member-application-capacity-reached",
+                    "待审核申请已满", error.getMessage()))
+            .onErrorResume(SecurityException.class, error ->
+                problem(HttpStatus.FORBIDDEN,
+                    "https://halo.run/probs/member-application-forbidden",
+                    "请求被拒绝", "请求被安全策略拒绝"))
+            .onErrorResume(RateLimitExceededException.class, error ->
+                problem(HttpStatus.TOO_MANY_REQUESTS,
+                    "https://halo.run/probs/request-not-permitted",
+                    "请求过于频繁", error.getMessage()))
+            .onErrorResume(IllegalArgumentException.class, error ->
+                problem(HttpStatus.BAD_REQUEST,
+                    "https://halo.run/probs/invalid-member-application",
+                    "成员申请内容无效", error.getMessage()))
             .doOnError(error -> log.error("成员申请提交失败", error));
+    }
+
+    private Mono<ServerResponse> problem(HttpStatus status, String type, String title,
+        String detail) {
+        return ServerResponse.status(status)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .bodyValue(new ProblemResponse(type, title, status.value(), detail));
+    }
+
+    /**
+     * 校验并消费图形验证码；关闭验证码时直接放行，保证既有集成方式可继续使用。
+     */
+    private Mono<Void> requireValidCaptcha(SettingConfigMember.BasicConfig config,
+        MemberSubmitRequest request) {
+        return Mono.<Void>fromRunnable(() -> {
+            if (!config.isEnableSubmitCaptcha()) {
+                return;
+            }
+            if (!captchaService.verifyChallenge(request.challengeId(), request.captchaCode())) {
+                log.warn("成员申请验证码校验失败");
+                throw new CaptchaRejectedException("验证码错误或已过期，请重新获取");
+            }
+        });
     }
     
     /**
@@ -371,13 +214,13 @@ public class MemberEndpoint implements CustomEndpoint {
      * 执行频率限制检查
      */
     private Mono<Void> performRateLimitCheck(ServerRequest request,
-        SettingConfigMember.BasicConfig config) {
+        SettingConfigMember.BasicConfig config, String scope) {
         return Mono.fromRunnable(() -> {
             if (!config.isEnableRateLimit()) {
                 return;
             }
 
-            String clientIP = RequestUtils.getClientIP(request);
+            String clientIP = scope + ":" + RequestUtils.getClientIP(request);
             int maxRequests = config.normalizedMaxRequestsPerMinute();
             
             if (!rateLimitService.isRequestAllowed(clientIP, maxRequests, Duration.ofMinutes(1))) {
@@ -413,7 +256,11 @@ public class MemberEndpoint implements CustomEndpoint {
         
         String qqFriendLink,
         
-        String groupName
+        String groupName,
+        
+        String challengeId,
+        
+        String captchaCode
     ) {}
 
     /**
@@ -421,9 +268,10 @@ public class MemberEndpoint implements CustomEndpoint {
      */
     public record ErrorResponse(String message) {}
 
+    public record ProblemResponse(String type, String title, int status, String detail) {}
+
     /**
-     * QQ 信息代理响应
+     * 图形验证码响应，图片以 data URL 返回，客户端只需回传 challengeId
      */
-    public record QqInfoResponse(String qq, String nickname, String avatar, String email,
-        String region, boolean profileAvailable, String source) {}
+    public record CaptchaResponse(String challengeId, String image, long expiresInSeconds) {}
 }

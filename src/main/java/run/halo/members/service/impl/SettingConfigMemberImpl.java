@@ -9,7 +9,6 @@ import reactor.core.publisher.Mono;
 import run.halo.app.plugin.ReactiveSettingFetcher;
 import run.halo.members.service.SettingConfigMember;
 import run.halo.members.service.SettingConfigMember.BasicGroupConfig;
-import run.halo.members.service.SettingConfigMember.IntegrationGroupConfig;
 import run.halo.members.service.SettingConfigMember.NotificationGroupConfig;
 import run.halo.members.service.SettingConfigMember.SecurityGroupConfig;
 
@@ -29,10 +28,9 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
                 settingFetcher.fetch(BasicGroupConfig.GROUP, BasicGroupConfig.class)
                     .defaultIfEmpty(new BasicGroupConfig()),
                 optionalGroup(NotificationGroupConfig.GROUP, NotificationGroupConfig.class),
-                optionalGroup(SecurityGroupConfig.GROUP, SecurityGroupConfig.class),
-                optionalGroup(IntegrationGroupConfig.GROUP, IntegrationGroupConfig.class)
+                optionalGroup(SecurityGroupConfig.GROUP, SecurityGroupConfig.class)
             )
-            .map(tuple -> merge(tuple.getT1(), tuple.getT2(), tuple.getT3(), tuple.getT4()));
+            .map(tuple -> merge(tuple.getT1(), tuple.getT2(), tuple.getT3()));
     }
 
     private <T> Mono<Optional<T>> optionalGroup(String group, Class<T> type) {
@@ -43,11 +41,11 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
 
     private BasicConfig merge(BasicGroupConfig basic,
                               Optional<NotificationGroupConfig> notification,
-                              Optional<SecurityGroupConfig> security,
-                              Optional<IntegrationGroupConfig> integration) {
+                              Optional<SecurityGroupConfig> security) {
         var config = new BasicConfig();
         config.setAutoApprove(basic.isAutoApprove());
         config.setAutoApproveWithdraw(basic.isAutoApproveWithdraw());
+        config.setPendingCapacity(basic.getPendingCapacity());
         config.setDefaultGroupName(basic.getDefaultGroupName());
         config.setForbidSelectedGroupName(basic.getForbidSelectedGroupName());
 
@@ -66,6 +64,8 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
             ? securityConfig.isEnableRateLimit() : basic.isEnableRateLimit());
         config.setMaxRequestsPerMinute(securityConfig != null
             ? securityConfig.getMaxRequestsPerMinute() : basic.getMaxRequestsPerMinute());
+        config.setEnableSubmitCaptcha(securityConfig != null
+            ? securityConfig.isEnableSubmitCaptcha() : basic.isEnableSubmitCaptcha());
         config.setEnableSecurityBlocklist(securityConfig != null
             ? securityConfig.isEnableSecurityBlocklist() : basic.isEnableSecurityBlocklist());
         config.setBlockedIpList(securityConfig != null
@@ -74,10 +74,11 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
             ? securityConfig.getBlockedUserAgentKeywords() : basic.getBlockedUserAgentKeywords());
         config.setRejectMissingUserAgent(securityConfig != null
             ? securityConfig.isRejectMissingUserAgent() : basic.isRejectMissingUserAgent());
+        // 认领专用配置：默认从 basic 组读取
+        config.setAutoApproveClaim(basic.isAutoApproveClaim());
+        config.setEnableClaimCaptcha(basic.isEnableClaimCaptcha());
+        config.setEnableClaimEmail(basic.isEnableClaimEmail());
 
-        var integrationConfig = integration.orElse(null);
-        config.setUapisToken(integrationConfig != null
-            ? integrationConfig.getUapisToken() : basic.getUapisToken());
         return config;
     }
 }

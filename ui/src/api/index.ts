@@ -30,20 +30,6 @@ export interface BatchOperationResult {
   message: string;
 }
 
-export interface QqInfo {
-  qq: string;
-  nickname: string;
-  avatar: string;
-  email: string;
-  region: string;
-  profileAvailable?: boolean;
-  source?: string;
-}
-
-export function fetchQqInfo(qq: string): ApiResponse<QqInfo> {
-  return axiosInstance.get(`${batchBaseURL}/qq-info`, { params: { qq } });
-}
-
 interface MembersCoreApiClient {
   member: {
     list: (params?: { page?: number; size?: number }) => ApiResponse<ListResult<Member>>;

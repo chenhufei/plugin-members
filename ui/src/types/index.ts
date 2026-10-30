@@ -18,6 +18,9 @@ export interface Member {
     qqFriendLink?: string;
     groupName?: string;
     status: string;
+    origin?: "FORM" | "CONSOLE" | string;
+    /** 自定义加入时间（ISO-8601），为空时使用创建时间 */
+    joinedAt?: string;
     /** @deprecated Legacy data only; no longer used for sorting or editing. */
     priority?: number;
     // 保留旧字段以兼容现有数据
@@ -78,6 +81,9 @@ export interface MemberFormState {
   qqFriendLink: string;
   groupName: string;
   status: string;
+  origin?: "FORM" | "CONSOLE" | string;
+  /** 自定义加入时间，表单内为本地 datetime-local 值，提交前转换为 ISO */
+  joinedAt?: string;
   /** @deprecated Legacy data only; no longer used for sorting or editing. */
   priority?: number;
   annotations?: Record<string, string>;

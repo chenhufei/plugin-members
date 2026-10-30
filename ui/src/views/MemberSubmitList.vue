@@ -334,6 +334,7 @@ function deleteMember(member: Member) {
       >
         <template #checkbox>
           <input
+            v-permission="['plugin:members:manage']"
             v-model="selectedMembers"
             :value="member.metadata.name"
             :disabled="Boolean(member.metadata.deletionTimestamp)"
@@ -348,7 +349,7 @@ function deleteMember(member: Member) {
           </VEntityField>
           <VEntityField
             :title="member.spec.displayName"
-            :description="member.spec.school || member.spec.email || '未填写学校'"
+            :description="[member.spec.school || member.spec.email || '未填写学校', member.spec.origin === 'FORM' ? '前台提交' : member.spec.origin === 'CONSOLE' ? '后台创建' : '历史记录'].join(' · ')"
             class=":uno: min-w-0 max-w-[32rem] cursor-pointer"
             @click="editingMember = member"
           />
@@ -421,9 +422,9 @@ function deleteMember(member: Member) {
         </template>
 
         <template #dropdownItems>
-          <VDropdownItem @click="editingMember = member">编辑成员</VDropdownItem>
-          <VDropdownDivider />
-          <VDropdownItem type="danger" @click="deleteMember(member)">删除</VDropdownItem>
+          <VDropdownItem v-permission="['plugin:members:manage']" @click="editingMember = member">编辑成员</VDropdownItem>
+          <VDropdownDivider v-permission="['plugin:members:manage']" />
+          <VDropdownItem v-permission="['plugin:members:manage']" type="danger" @click="deleteMember(member)">删除</VDropdownItem>
         </template>
       </VEntity>
     </VEntityContainer>

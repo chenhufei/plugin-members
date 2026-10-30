@@ -56,6 +56,24 @@ public interface MemberBatchService {
     Mono<String> exportToJSON(List<String> memberNames);
     
     /**
+     * 批量导入成员（从JSON数据）
+     * 
+     * @param jsonData JSON格式的成员数据
+     * @param defaultGroup 默认分组（如果数据中未指定）
+     * @return 操作结果
+     */
+    Mono<BatchOperationResult> batchImportFromJSON(String jsonData, String defaultGroup);
+    
+    /**
+     * 批量导入成员（从CSV数据）
+     * 
+     * @param csvData CSV格式的成员数据
+     * @param defaultGroup 默认分组（如果数据中未指定）
+     * @return 操作结果
+     */
+    Mono<BatchOperationResult> batchImportFromCSV(String csvData, String defaultGroup);
+    
+    /**
      * 批量操作结果
      */
     record BatchOperationResult(

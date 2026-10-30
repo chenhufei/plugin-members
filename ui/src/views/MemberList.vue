@@ -4,7 +4,6 @@ import { groupMembers, type GroupWithMembers } from "@/utils/group-members";
 import {
   IconExternalLinkLine,
   IconRefreshLine,
-  IconTeam,
   VButton,
   VLoading,
   VPageHeader,
@@ -13,6 +12,7 @@ import {
 import { useQuery } from "@tanstack/vue-query";
 import { computed, defineAsyncComponent, ref, shallowRef } from "vue";
 import { membersBatchApiClient, membersCoreApiClient } from "@/api";
+import TeamLineIcon from "@/components/TeamLineIcon";
 import ListFilterSelect from "@/components/ListFilterSelect.vue";
 
 import type { Member } from "@/types";
@@ -70,10 +70,11 @@ const filteredGroups = computed(() => data.value || []);
 <template>
   <VPageHeader title="成员管理">
     <template #icon>
-      <IconTeam />
+      <TeamLineIcon />
     </template>
     <template #actions>
       <VButton size="sm" type="secondary" @click="$router.push('/members/submits')">自助提交管理</VButton>
+      <VButton size="sm" type="secondary" @click="$router.push('/members/claims')">认领链接</VButton>
       <VButton @click="handleRouteToFront" size="sm" ghost>
         <template #icon>
           <IconExternalLinkLine />

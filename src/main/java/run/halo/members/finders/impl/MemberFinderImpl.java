@@ -1,6 +1,10 @@
 package run.halo.members.finders.impl;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -254,12 +258,13 @@ public class MemberFinderImpl implements MemberFinder {
     }
 
     private int compareMemberOrder(MemberVo m1, MemberVo m2) {
-        var first = m1.getMetadata().getCreationTimestamp();
-        var second = m2.getMetadata().getCreationTimestamp();
+        var first = joinedAt(m1);
+        var second = joinedAt(m2);
         if (first == null && second != null) return 1;
         if (first != null && second == null) return -1;
         if (first != null && second != null) {
-            int byTime = second.compareTo(first);
+            // 最早加入的成员排在前面，后申请的依次往后
+            int byTime = first.compareTo(second);
             if (byTime != 0) return byTime;
         }
         String firstName = m1.getSpec() == null || m1.getSpec().getDisplayName() == null
@@ -270,6 +275,27 @@ public class MemberFinderImpl implements MemberFinder {
         if (byName != 0) return byName;
         return String.CASE_INSENSITIVE_ORDER.compare(
             m1.getMetadata().getName(), m2.getMetadata().getName());
+    }
+
+    /**
+     * 加入时间：管理员自定义的 joinedAt 优先，缺失时回退到创建时间。
+     */
+    private Instant joinedAt(MemberVo member) {
+        var spec = member.getSpec();
+        if (spec != null && spec.getJoinedAt() != null && !spec.getJoinedAt().isBlank()) {
+            String raw = spec.getJoinedAt().trim();
+            try {
+                return Instant.parse(raw);
+            } catch (DateTimeParseException ignored) {
+                try {
+                    return LocalDateTime.parse(raw).atZone(ZoneId.systemDefault()).toInstant();
+                } catch (DateTimeParseException alsoIgnored) {
+                    log.warn("成员 {} 的 joinedAt 格式无法解析: {}",
+                        member.getMetadata().getName(), raw);
+                }
+            }
+        }
+        return member.getMetadata() != null ? member.getMetadata().getCreationTimestamp() : null;
     }
 
     private MemberGroupVo createVirtualGroup(String name, String displayName, List<MemberVo> members) {

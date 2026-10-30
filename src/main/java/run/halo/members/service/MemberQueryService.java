@@ -23,7 +23,9 @@ public class MemberQueryService {
 
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_SIZE = 20;
-    private static final int MAX_SIZE = 500;
+    // The grouped management view deliberately requests the complete collection.
+    // Keep the limit bounded, but do not silently truncate that view at 500 records.
+    public static final int MAX_SIZE = 10_000;
 
     private final ReactiveExtensionClient client;
 

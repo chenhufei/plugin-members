@@ -268,3 +268,69 @@ spec:
           </div>
         </div>
       </div>
+
+---
+apiVersion: notification.halo.run/v1alpha1
+kind: NotificationTemplate
+metadata:
+  name: template-user-member-claim-link
+spec:
+  reasonSelector:
+    reasonType: user-member-claim-link
+    language: default
+  template:
+    title: "请补全你的 QQ 加好友链接"
+    rawBody: |
+      [(${displayName})]，你好：
+      管理员邀请你补全 QQ 加好友链接，补全后其他成员可以通过你的 QQ 链接直接添加你。
+      QQ 号：[(${qq})]
+      补全链接：[(${claimUrl})]
+      该链接为一次性链接，补全后即失效。如非本人操作请忽略。
+    htmlBody: |
+      <div style="max-width:640px;margin:0 auto;color:#172033;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;line-height:1.7;">
+        <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#fff;">
+          <div style="padding:22px 24px;background:#f8fafc;border-bottom:1px solid #e5e7eb;">
+            <div style="font-size:13px;color:#64748b;">成员信息补全</div>
+            <h2 style="margin:4px 0 0;font-size:20px;color:#111827;">请补全你的 QQ 加好友链接</h2>
+          </div>
+          <div style="padding:22px 24px;">
+            <p style="margin:0 0 16px;" th:text="|${displayName}，你好：|"></p>
+            <p style="margin:0 0 16px;">管理员邀请你补全 QQ 加好友链接。补全后，其他成员可以直接通过你的 QQ 链接添加你为好友。</p>
+            <table role="presentation" style="width:100%;border-collapse:collapse;font-size:14px;">
+              <tr><td style="width:80px;padding:8px 0;color:#64748b;">QQ 号</td><td style="padding:8px 0;font-weight:600;" th:text="${qq}"></td></tr>
+              <tr th:if="${school != null and school != ''}"><td style="padding:8px 0;color:#64748b;">学校</td><td style="padding:8px 0;" th:text="${school}"></td></tr>
+            </table>
+            <p style="margin:20px 0 0;text-align:center;">
+              <a th:href="${claimUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 24px;border-radius:6px;background:#2563eb;color:#fff;text-decoration:none;font-weight:600;">点击补全 QQ 链接</a>
+            </p>
+            <p style="margin:16px 0 0;color:#64748b;font-size:13px;text-align:center;">该链接为一次性链接，补全后即失效。如非本人操作请忽略。</p>
+          </div>
+        </div>
+      </div>
+
+---
+apiVersion: notification.halo.run/v1alpha1
+kind: NotificationTemplate
+metadata:
+  name: template-user-member-claim-code
+spec:
+  reasonSelector:
+    reasonType: user-member-claim-code
+    language: default
+  template:
+    title: "你的 QQ 链接补全验证码"
+    rawBody: |
+      [(${displayName})]，你好：
+      你的验证码为：[(${code})]
+      验证码有效期为 5 分钟，请勿向他人透露。
+    htmlBody: |
+      <div style="max-width:640px;margin:0 auto;color:#172033;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;line-height:1.7;">
+        <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#fff;">
+          <div style="padding:22px 24px;background:#f8fafc;border-bottom:1px solid #e5e7eb;"><div style="font-size:13px;color:#64748b;">成员信息补全</div><h2 style="margin:4px 0 0;font-size:20px;color:#111827;">QQ 链接补全验证码</h2></div>
+          <div style="padding:22px 24px;text-align:center;">
+            <p style="margin:0 0 12px;" th:text="|${displayName}，你的验证码是：|"></p>
+            <div style="display:inline-block;padding:10px 18px;border-radius:6px;background:#f1f5f9;color:#111827;font-size:26px;font-weight:700;letter-spacing:6px;" th:text="${code}"></div>
+            <p style="margin:14px 0 0;color:#64748b;font-size:13px;">验证码 5 分钟内有效，请勿向他人透露。</p>
+          </div>
+        </div>
+      </div>

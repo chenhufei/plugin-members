@@ -15,6 +15,7 @@ public interface SettingConfigMember {
     class BasicConfig {
         private boolean autoApprove;
         private boolean autoApproveWithdraw;
+        private Integer pendingCapacity = 100;
         private boolean enableAdminNotification = true;
         private String adminUsername = "admin";
         private boolean sendEmail;
@@ -23,17 +24,27 @@ public interface SettingConfigMember {
         private String[] forbidSelectedGroupName;
         private boolean enableRateLimit = true;
         private Integer maxRequestsPerMinute = 10;
+        private boolean enableSubmitCaptcha = true;
         private boolean enableSecurityBlocklist;
         private String blockedIpList;
         private String blockedUserAgentKeywords;
         private boolean rejectMissingUserAgent;
-        private String uapisToken;
+        private boolean autoApproveClaim = false;
+        private boolean enableClaimCaptcha = true;
+        private boolean enableClaimEmail = true;
 
         public int normalizedMaxRequestsPerMinute() {
             if (maxRequestsPerMinute == null || maxRequestsPerMinute < 1) {
                 return 10;
             }
             return Math.min(maxRequestsPerMinute, 1000);
+        }
+
+        public int normalizedPendingCapacity() {
+            if (pendingCapacity == null || pendingCapacity < 1) {
+                return 100;
+            }
+            return Math.min(pendingCapacity, 100_000);
         }
     }
 
@@ -43,6 +54,7 @@ public interface SettingConfigMember {
 
         private boolean autoApprove;
         private boolean autoApproveWithdraw;
+        private Integer pendingCapacity = 100;
         private String defaultGroupName;
         private String[] forbidSelectedGroupName = new String[0];
 
@@ -51,11 +63,14 @@ public interface SettingConfigMember {
         private String adminEmail;
         private boolean enableRateLimit = true;
         private Integer maxRequestsPerMinute = 10;
+        private boolean enableSubmitCaptcha = true;
         private boolean enableSecurityBlocklist;
         private String blockedIpList;
         private String blockedUserAgentKeywords;
         private boolean rejectMissingUserAgent;
-        private String uapisToken;
+        private boolean autoApproveClaim = false;
+        private boolean enableClaimCaptcha = true;
+        private boolean enableClaimEmail = true;
     }
 
     @Data
@@ -72,15 +87,10 @@ public interface SettingConfigMember {
         public static final String GROUP = "security";
         private boolean enableRateLimit = true;
         private Integer maxRequestsPerMinute = 10;
+        private boolean enableSubmitCaptcha = true;
         private boolean enableSecurityBlocklist;
         private String blockedIpList = "";
         private String blockedUserAgentKeywords = "";
         private boolean rejectMissingUserAgent;
-    }
-
-    @Data
-    class IntegrationGroupConfig {
-        public static final String GROUP = "integration";
-        private String uapisToken = "";
     }
 }

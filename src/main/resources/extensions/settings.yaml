@@ -14,6 +14,15 @@ spec:
           label: 自动通过申请
           help: 新成员申请提交后直接通过，适合无需人工审核的站点
           value: false
+        - $formkit: number
+          name: pendingCapacity
+          id: pendingCapacity
+          key: pendingCapacity
+          label: 待审核申请容量
+          help: 未开启自动通过时，限制同时处于待审核状态的成员申请数量
+          value: 100
+          step: 1
+          validation: required|number|min:1|matches:/^[1-9][0-9]*$/
         - $formkit: switch
           name: autoApproveWithdraw
           id: autoApproveWithdraw
@@ -79,7 +88,7 @@ spec:
           id: sendEmail
           key: sendEmail
           label: 发送邮件通知
-          help: 向管理员邮箱和申请人邮箱发送提交、通过、拒绝、下架与撤回结果
+          help: 关闭时不发送任何邮件，且成员自助补全 QQ 链接的邮箱验证码、撤回验证码会直接返回不可用。开启后还需在 Halo 控制台「通知-邮件」中配置发信服务，本插件才能实际投递。
           value: false
         - $formkit: text
           if: $get(sendEmail).value === true
@@ -111,6 +120,13 @@ spec:
           value: 10
           validation: required|min:1|max:1000
         - $formkit: switch
+          id: enableSubmitCaptcha
+          name: enableSubmitCaptcha
+          key: enableSubmitCaptcha
+          label: 提交需要图形验证码
+          help: 匿名提交成员申请前必须先通过图形验证码，关闭后旧版表单可直接提交
+          value: true
+        - $formkit: switch
           id: enableSecurityBlocklist
           name: enableSecurityBlocklist
           key: enableSecurityBlocklist
@@ -141,14 +157,24 @@ spec:
           label: 拒绝空 User-Agent
           help: 默认关闭，避免误伤代理或特殊客户端
           value: false
-
-    - group: integration
-      label: QQ 信息
-      formSchema:
-        - $formkit: password
-          id: uapisToken
-          name: uapisToken
-          key: uapisToken
-          label: Uapis 密钥
-          help: 用于通过 uapis.cn 获取 QQ 昵称；留空时使用无需密钥的降级接口
-          value: ""
+        - $formkit: switch
+          id: autoApproveClaim
+          name: autoApproveClaim
+          key: autoApproveClaim
+          label: 认领自动通过
+          help: 开启后成员自助补全 QQ 链接立即生效；关闭时需管理员在后台审核通过后才显示
+          value: false
+        - $formkit: switch
+          id: enableClaimCaptcha
+          name: enableClaimCaptcha
+          key: enableClaimCaptcha
+          label: 认领需要图形验证码
+          help: 关闭后可跳过图形验证码，但需配合关闭邮箱验证码使用；建议至少保留其中一项
+          value: true
+        - $formkit: switch
+          id: enableClaimEmail
+          name: enableClaimEmail
+          key: enableClaimEmail
+          label: 认领需要邮箱验证码
+          help: 关闭后跳过邮箱/验证码流程；如需邮箱登录请使用上方「管理员分发认领链接」功能
+          value: true

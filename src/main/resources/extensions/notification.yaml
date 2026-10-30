@@ -61,6 +61,15 @@ spec:
     - name: displayName
       type: string
       description: "成员姓名"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: groupName
+      type: string
+      description: "分组"
     - name: memberUrl
       type: string
       description: "成员页面链接"
@@ -81,6 +90,15 @@ spec:
     - name: displayName
       type: string
       description: "成员姓名"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: groupName
+      type: string
+      description: "分组"
     - name: reviewDescription
       type: string
       optional: true
@@ -108,6 +126,15 @@ spec:
     - name: displayName
       type: string
       description: "成员姓名"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: groupName
+      type: string
+      description: "分组"
     - name: reviewDescription
       type: string
       optional: true
@@ -132,6 +159,15 @@ spec:
     - name: displayName
       type: string
       description: "成员姓名"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: groupName
+      type: string
+      description: "分组"
     - name: offlineReason
       type: string
       description: "下架原因"
@@ -228,3 +264,50 @@ spec:
     - name: reviewUrl
       type: string
       description: "审核链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-claim-link
+spec:
+  displayName: "成员认领链接通知"
+  description: "向成员发送 QQ 链接认领通知邮件"
+  properties:
+    - name: email
+      type: string
+      description: "收件邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: school
+      type: string
+      optional: true
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: claimUrl
+      type: string
+      description: "认领链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-claim-code
+spec:
+  displayName: "成员认领验证码"
+  description: "发送 QQ 链接补全验证码"
+  properties:
+    - name: email
+      type: string
+      description: "收件邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: code
+      type: string
+      description: "验证码"

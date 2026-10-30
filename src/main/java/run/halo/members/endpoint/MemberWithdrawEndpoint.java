@@ -4,10 +4,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.net.URI;
 import java.time.Instant;
 import java.time.Duration;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,15 +32,19 @@ import run.halo.app.plugin.ApiVersion;
 import run.halo.members.Member;
 import run.halo.members.cache.VerificationCodeService;
 import run.halo.members.security.RateLimitService;
+import run.halo.members.service.MailDeliveryGuard;
 import run.halo.members.service.SettingConfigMember;
 import run.halo.members.finders.impl.MemberFinderImpl;
 import reactor.core.publisher.Mono;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.scheduler.Schedulers;
+import run.halo.members.utils.EmailUtils;
 import static run.halo.members.MemberConstant.*;
 
 /**
  * 用户自助撤回申请端点
  */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @ApiVersion("api.plugin.halo.run/v1alpha1")
@@ -46,6 +54,7 @@ public class MemberWithdrawEndpoint {
     private final ExtensionClient client;
     private final VerificationCodeService codeService;
     private final SettingConfigMember settingConfigMember;
+    private final MailDeliveryGuard mailDeliveryGuard;
     private final MemberFinderImpl memberFinder;
     private final NotificationReasonEmitter notificationReasonEmitter;
     private final NotificationCenter notificationCenter;
@@ -56,24 +65,30 @@ public class MemberWithdrawEndpoint {
      * 发送验证码
      */
     @PostMapping("/-/send-verification-code")
-    public Mono<ResponseEntity<Map<String, Object>>> sendVerificationCode(
+    public Mono<ResponseEntity<Object>> sendVerificationCode(
             @RequestBody WithdrawRequest request) {
 
         if (StringUtils.isEmpty(request.email) || StringUtils.isEmpty(request.qq)) {
-            return Mono.just(errorResponse("请提供QQ号和邮箱"));
+            return Mono.just(problem(HttpStatus.BAD_REQUEST, "invalid-withdraw-request",
+                "撤回请求内容无效", "请提供QQ号和邮箱"));
         }
         String email = request.email.trim().toLowerCase();
         String qq = request.qq.trim();
         if (!rateLimitService.isRequestAllowed("withdraw-code:" + email + ":" + qq,
             3, Duration.ofMinutes(10))) {
-            return Mono.just(errorResponse("验证码发送过于频繁，请稍后再试"));
+            return Mono.just(problem(HttpStatus.TOO_MANY_REQUESTS, "request-not-permitted",
+                "请求过于频繁", "验证码发送过于频繁，请稍后再试"));
         }
 
+        return mailDeliveryGuard.unavailabilityReason()
+            .flatMap(reason -> reason.isPresent()
+                ? Mono.just(problem(HttpStatus.CONFLICT, "withdraw-unavailable", "撤回功能不可用",
+                    reason.get()))
+                : sendVerificationCodeNow(email, qq));
+    }
+
+    private Mono<ResponseEntity<Object>> sendVerificationCodeNow(String email, String qq) {
         return Mono.fromCallable(() -> {
-            var config = settingConfigMember.getBasicConfig().block();
-            if (config == null || !config.isSendEmail()) {
-                return errorResponse("邮件通知未开启，暂时无法发送撤回验证码");
-            }
             List<Member> members = client.listAll(Member.class,
                 new run.halo.app.extension.ListOptions(),
                 run.halo.app.extension.ExtensionUtil.defaultSort());
@@ -83,7 +98,8 @@ public class MemberWithdrawEndpoint {
                 .findFirst();
 
             if (found.isEmpty()) {
-                return errorResponse("未找到匹配的成员记录");
+                return problem(HttpStatus.NOT_FOUND, "member-not-found",
+                    "未找到成员", "未找到匹配的成员记录");
             }
 
             Member member = found.get();
@@ -91,12 +107,22 @@ public class MemberWithdrawEndpoint {
             if (!"APPROVED".equals(status)
                 && !"PENDING".equals(status)
                 && !"WITHDRAW_REQUESTED".equals(status)) {
-                return errorResponse("该成员暂无申请记录，无法撤回");
+                return problem(HttpStatus.CONFLICT, "withdraw-not-allowed",
+                    "成员状态不允许撤回", "该成员暂无申请记录，无法撤回");
             }
 
             String code = codeService.generateCode(verificationKey(email, qq));
-            publishVerificationCode(member, email, code);
-            return successResponse("验证码已发送，请查收邮箱");
+            try {
+                publishVerificationCode(member, email, code);
+            } catch (RuntimeException error) {
+                // 邮件没提交成功就保留验证码，会让用户在有效期内既收不到邮件也无法重新获取
+                codeService.invalidate(verificationKey(email, qq));
+                log.error("提交撤回验证码通知失败", error);
+                return problem(HttpStatus.BAD_GATEWAY, "verification-code-send-failed",
+                    "验证码发送失败", "验证码邮件提交失败，请稍后重试或联系管理员");
+            }
+            return successResponse(
+                "验证码已发送至 " + EmailUtils.mask(email) + "，5 分钟内有效");
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -104,12 +130,13 @@ public class MemberWithdrawEndpoint {
      * 提交撤回请求
      */
     @PostMapping("/-/withdraw")
-    public Mono<ResponseEntity<Map<String, Object>>> withdraw(
+    public Mono<ResponseEntity<Object>> withdraw(
             @RequestBody WithdrawRequest request) {
 
         if (StringUtils.isEmpty(request.email) || StringUtils.isEmpty(request.code)
             || StringUtils.isEmpty(request.qq)) {
-            return Mono.just(errorResponse("请提供邮箱、验证码和QQ号"));
+            return Mono.just(problem(HttpStatus.BAD_REQUEST, "invalid-withdraw-request",
+                "撤回请求内容无效", "请提供邮箱、验证码和QQ号"));
         }
 
         String email = request.email.trim().toLowerCase();
@@ -119,12 +146,14 @@ public class MemberWithdrawEndpoint {
         String verificationKey = verificationKey(email, qq);
         if (!rateLimitService.isRequestAllowed("withdraw-verify:" + verificationKey,
             10, Duration.ofMinutes(10))) {
-            return Mono.just(errorResponse("验证码尝试次数过多，请稍后重新获取"));
+            return Mono.just(problem(HttpStatus.TOO_MANY_REQUESTS, "request-not-permitted",
+                "请求过于频繁", "验证码尝试次数过多，请稍后重新获取"));
         }
         return Mono.fromCallable(() -> {
             boolean valid = codeService.verifyCode(verificationKey, code);
             if (!valid) {
-                return errorResponse("验证码错误，请重新输入");
+                return problem(HttpStatus.BAD_REQUEST, "invalid-verification-code",
+                    "验证码无效", "验证码错误，请重新输入");
             }
 
             List<Member> members = client.listAll(Member.class,
@@ -136,7 +165,8 @@ public class MemberWithdrawEndpoint {
                 .findFirst();
 
             if (found.isEmpty()) {
-                return errorResponse("未找到匹配的成员记录");
+                return problem(HttpStatus.NOT_FOUND, "member-not-found",
+                    "未找到成员", "未找到匹配的成员记录");
             }
 
             Member member = found.get();
@@ -187,14 +217,17 @@ public class MemberWithdrawEndpoint {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
-    private ResponseEntity<Map<String, Object>> errorResponse(String message) {
-        Map<String, Object> errMap = new HashMap<>();
-        errMap.put("failed", true);
-        errMap.put("message", message);
-        return ResponseEntity.badRequest().body(errMap);
+    private ResponseEntity<Object> problem(HttpStatus status, String typeSuffix, String title,
+        String detail) {
+        var problem = ProblemDetail.forStatusAndDetail(status, detail);
+        problem.setType(URI.create("https://halo.run/probs/" + typeSuffix));
+        problem.setTitle(title);
+        return ResponseEntity.status(status)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problem);
     }
 
-    private ResponseEntity<Map<String, Object>> successResponse(String message) {
+    private ResponseEntity<Object> successResponse(String message) {
         Map<String, Object> okMap = new HashMap<>();
         okMap.put("failed", false);
         okMap.put("message", message);
@@ -274,6 +307,7 @@ public class MemberWithdrawEndpoint {
         
         notificationReasonEmitter.emit(ADMIN_MEMBER_WITHDRAW,
             builder -> builder.attributes(attrs)
+                .author(UserIdentity.anonymousWithEmail(email))
                 .subject(reasonSubject)
             ).block();
     }
@@ -335,7 +369,8 @@ public class MemberWithdrawEndpoint {
     }
 
     private String verificationKey(String email, String qq) {
-        return email + ":" + qq;
+        // 与认领验证码分命名空间，避免跨流程复用与互相挡发信
+        return "withdraw:" + email + ":" + qq;
     }
 
     /**

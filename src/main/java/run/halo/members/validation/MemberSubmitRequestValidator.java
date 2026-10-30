@@ -1,7 +1,5 @@
 package run.halo.members.validation;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -10,6 +8,7 @@ import org.springframework.stereotype.Component;
 import lombok.RequiredArgsConstructor;
 import run.halo.members.endpoint.MemberEndpoint;
 import run.halo.members.security.SecurityService;
+import run.halo.members.utils.QqLinkUtils;
 
 /**
  * Centralized validation and normalization for anonymous member submissions.
@@ -51,7 +50,10 @@ public class MemberSubmitRequestValidator {
             school,
             qq,
             qqFriendLink,
-            groupName
+            groupName,
+            // 验证码在端点校验并消费，业务层只保留原始回传值
+            request.challengeId(),
+            request.captchaCode()
         );
     }
 
@@ -101,17 +103,9 @@ public class MemberSubmitRequestValidator {
         if (StringUtils.isBlank(qqFriendLink)) {
             return;
         }
-        if (qqFriendLink.length() > 500) {
-            throw new IllegalArgumentException("QQ好友链接不能超过500个字符");
-        }
-        try {
-            URI uri = new URI(qqFriendLink);
-            String scheme = uri.getScheme();
-            if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
-                throw new IllegalArgumentException("QQ好友链接必须是 http 或 https 地址");
-            }
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("QQ好友链接格式不正确", e);
+        String error = QqLinkUtils.validate(qqFriendLink);
+        if (error != null) {
+            throw new IllegalArgumentException(error);
         }
     }
 }

@@ -5,10 +5,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import run.halo.members.exception.RateLimitExceededException;
 
 /**
  * Endpoint DTO 测试
@@ -24,7 +20,9 @@ class MemberEndpointTest {
             "清华大学",
             "12345678",
             "https://qm.qq.com/xxxx",
-            "default-group"
+            "default-group",
+            "challenge-1",
+            "AB234"
         );
 
         assertEquals("测试成员", request.displayName());
@@ -33,6 +31,8 @@ class MemberEndpointTest {
         assertEquals("12345678", request.qq());
         assertEquals("https://qm.qq.com/xxxx", request.qqFriendLink());
         assertEquals("default-group", request.groupName());
+        assertEquals("challenge-1", request.challengeId());
+        assertEquals("AB234", request.captchaCode());
     }
 
     @Test
@@ -44,11 +44,15 @@ class MemberEndpointTest {
             "清华大学",
             "12345678",
             null,
+            null,
+            null,
             null
         );
 
         assertNull(request.qqFriendLink());
         assertNull(request.groupName());
+        assertNull(request.challengeId());
+        assertNull(request.captchaCode());
     }
 
     @Test
@@ -56,28 +60,6 @@ class MemberEndpointTest {
     void testErrorResponseRecords() {
         assertEquals("提交失败", new MemberEndpoint.ErrorResponse("提交失败").message());
         assertEquals("公开查询失败", new MemberPublicEndpoint.ErrorResponse("公开查询失败").message());
-    }
-
-    @Test
-    @DisplayName("QQ 查询只对外部服务失败降级")
-    void testQqErrorPropagationPolicy() {
-        assertFalse(MemberEndpoint.shouldUseQqFallback(new SecurityException("blocked")));
-        assertFalse(MemberEndpoint.shouldUseQqFallback(
-            new RateLimitExceededException("limited")));
-        assertTrue(MemberEndpoint.shouldUseQqFallback(new IllegalStateException("upstream")));
-    }
-
-    @Test
-    @DisplayName("QQ 查询降级时只提供头像，不伪造昵称和邮箱")
-    void testQqInfoFallbackDoesNotInventProfileData() {
-        var result = MemberEndpoint.fallbackQqInfo("12345678");
-
-        assertEquals("12345678", result.qq());
-        assertEquals("", result.nickname());
-        assertEquals("", result.email());
-        assertTrue(result.avatar().contains("12345678"));
-        assertFalse(result.profileAvailable());
-        assertEquals("lookup-failed", result.source());
     }
 
     @Test

@@ -49,6 +49,16 @@ class MemberTest {
     }
 
     @Test
+    @DisplayName("记录成员来源并支持旧数据缺省值")
+    void testMemberOrigin() {
+        Member.MemberSpec spec = new Member.MemberSpec();
+
+        assertEquals(null, spec.getOrigin());
+        spec.setOrigin("FORM");
+        assertEquals("FORM", spec.getOrigin());
+    }
+
+    @Test
     @DisplayName("测试兼容旧数据的废弃字段仍可用")
     void testDeprecatedFieldsRemainAvailable() {
         Member.MemberSpec spec = new Member.MemberSpec();

@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import { useMemberGroupFetch } from "@/composables/use-group-fetch";
-import { fetchQqInfo } from "@/api";
 import type { MemberFormState } from "@/types";
 import { Toast, VButton } from "@halo-dev/components";
 import jsQR from "jsqr";
@@ -30,15 +29,35 @@ const data = ref<MemberFormState>({
   qqFriendLink: "",
   groupName: "",
   status: "PENDING",
+  joinedAt: "",
 });
 
-const qqNicknameLoading = shallowRef(false);
 const qrCodeProcessing = shallowRef(false);
 const qrInput = useTemplateRef<HTMLInputElement>("qrInput");
 
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function isoToLocalInput(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localInputToIso(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
 onMounted(() => {
   if (props.formState) {
-    data.value = { ...toRaw(props.formState) };
+    data.value = {
+      ...toRaw(props.formState),
+      joinedAt: isoToLocalInput(props.formState.joinedAt),
+    };
   }
 });
 
@@ -51,30 +70,6 @@ const annotationsForm = ref();
 // QQ validation
 function validateQQ(qq: string) {
   return /^\d{5,12}$/.test(qq);
-}
-
-async function handleFetchQQInfo() {
-  if (!validateQQ(data.value.qq)) return;
-  qqNicknameLoading.value = true;
-  try {
-    const { data: qqInfo } = await fetchQqInfo(data.value.qq);
-    if (qqInfo.avatar) data.value.avatar = qqInfo.avatar;
-    if (qqInfo.email) data.value.email = qqInfo.email;
-    if (qqInfo.nickname) {
-      data.value.displayName = qqInfo.nickname;
-      Toast.success(`已获取 QQ 昵称：${qqInfo.nickname}`);
-    } else if (qqInfo.email) {
-      Toast.success("该 QQ 未公开昵称，已填入可用资料");
-    } else if (qqInfo.source === "no-public-profile") {
-      Toast.warning("该 QQ 未公开昵称或邮箱，请手动填写账号名称和邮箱");
-    } else {
-      Toast.warning("信息服务暂不可用，已提供头像地址，请手动填写账号名称和邮箱");
-    }
-  } catch {
-    Toast.error("获取 QQ 信息失败，请稍后重试或手动填写");
-  } finally {
-    qqNicknameLoading.value = false;
-  }
 }
 
 function handleQRCodeUpload(e: Event) {
@@ -95,17 +90,12 @@ function handleQRCodeUpload(e: Event) {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     if (code?.data) {
-      if (code.data.includes("qm.qq.com") || code.data.includes("qq.com") || code.data.includes("tencent://")) {
-        data.value.qqFriendLink = code.data;
+      const match = code.data.trim().match(/^https:\/\/qm\.qq\.com\/q\/[^\s]+$/i);
+      if (match) {
+        data.value.qqFriendLink = match[0];
         Toast.success("二维码解析成功！");
       } else {
-        const match = code.data.match(/(\d{5,12})/);
-        if (match) {
-          data.value.qqFriendLink = `https://qm.qq.com/cgi-bin/qm/qr?k=${match[1]}`;
-          Toast.success(`识别到QQ号：${match[1]}，已生成链接`);
-        } else {
-          Toast.warning("不是QQ加好友链接");
-        }
+        Toast.warning("不是 QQ 加好友链接（需为 https://qm.qq.com/q/ 开头）");
       }
     } else {
       Toast.error("无法识别二维码");
@@ -131,9 +121,16 @@ async function onSubmit() {
   if (!data.value.displayName.trim()) { Toast.error("请填写账号名称"); return; }
   if (!data.value.school.trim()) { Toast.error("请填写所属学校"); return; }
   if (!validateQQ(data.value.qq)) { Toast.error("请填写 5-12 位 QQ号"); return; }
+  const friendLink = data.value.qqFriendLink.trim();
+  if (friendLink && !/^https:\/\/qm\.qq\.com\/q\/[^\s]+$/i.test(friendLink)) {
+    Toast.error("QQ 加好友链接需为 https://qm.qq.com/q/ 开头的链接");
+    return;
+  }
 
   emit("submit", {
     ...data.value,
+    qqFriendLink: friendLink,
+    joinedAt: localInputToIso(data.value.joinedAt),
     annotations: { ...annotations, ...customAnnotations },
   });
 }
@@ -148,16 +145,12 @@ async function onSubmit() {
         </div>
       </div>
       <div class=":uno: mt-5 md:col-span-3 md:mt-0 divide-y divide-gray-100">
-        <FormKit type="text" name="qq" v-model="data.qq" label="QQ号" validation="required" help="填写后点按钮获取昵称和头像" />
-        <div class=":uno: py-2">
-          <VButton size="sm" type="secondary" :loading="qqNicknameLoading" @click="handleFetchQQInfo">
-            获取QQ信息
-          </VButton>
-        </div>
+        <FormKit type="text" name="qq" v-model="data.qq" label="QQ号" validation="required" />
 
         <FormKit type="text" name="displayName" v-model="data.displayName" validation="required" label="账号名称" help="例如：清华大学表白墙" />
         <FormKit type="text" name="school" v-model="data.school" validation="required" label="所属学校" help="例如：清华大学" />
-        <FormKit type="text" name="qqFriendLink" v-model="data.qqFriendLink" label="QQ加好友链接" help="可通过上传二维码自动获取" />
+        <FormKit type="datetime-local" name="joinedAt" v-model="data.joinedAt" label="加入时间" help="用于成员排序与加入时间展示；留空则使用创建时间" />
+        <FormKit type="text" name="qqFriendLink" v-model="data.qqFriendLink" label="QQ加好友链接" help="需为 https://qm.qq.com/q/ 开头的链接，可通过上传二维码自动获取" />
         <div class=":uno: py-2">
           <input type="file" accept="image/*" style="display:none" ref="qrInput" @change="handleQRCodeUpload" />
           <VButton size="sm" type="secondary" :loading="qrCodeProcessing" @click="qrInput?.click()">

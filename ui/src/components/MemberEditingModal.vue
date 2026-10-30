@@ -42,6 +42,7 @@ const { mutate, isPending } = useMutation({
       { op: "add", path: "/spec/qqFriendLink", value: data.qqFriendLink || "" },
       { op: "add", path: "/spec/groupName", value: data.groupName || "" },
       { op: "add", path: "/spec/status", value: data.status },
+      { op: "add", path: "/spec/joinedAt", value: data.joinedAt || "" },
       {
         op: "add",
         path: "/metadata/annotations",
@@ -97,6 +98,7 @@ function handleDelete() {
         qqFriendLink: member.spec.qqFriendLink || '',
         groupName: member.spec.groupName || '',
         status: member.spec.status,
+        joinedAt: member.spec.joinedAt || '',
         annotations: member.metadata.annotations,
       }"
       :show-status="showStatus"

@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Comparator;
 
 import org.springframework.stereotype.Service;
 
@@ -26,6 +27,7 @@ public class RateLimitService {
     // 默认配置：每分钟最多10次请求
     private static final int DEFAULT_MAX_REQUESTS = 10;
     private static final int MAX_REQUESTS_LIMIT = 1000;
+    private static final int MAX_TRACKED_CLIENTS = 10_000;
     private static final Duration DEFAULT_WINDOW = Duration.ofMinutes(1);
     
     /**
@@ -53,6 +55,7 @@ public class RateLimitService {
         }
         
         Instant now = Instant.now();
+        pruneIfNeeded(now);
         int normalizedMaxRequests = normalizeMaxRequests(maxRequests);
         Duration normalizedWindow = normalizeWindow(window);
         RequestWindow requestWindow = requestWindows.compute(clientId, (key, existingWindow) -> {
@@ -89,6 +92,23 @@ public class RateLimitService {
         Instant now = Instant.now();
         requestWindows.entrySet().removeIf(entry -> 
             entry.getValue().isExpired(now));
+    }
+
+    private void pruneIfNeeded(Instant now) {
+        if (requestWindows.size() < MAX_TRACKED_CLIENTS) {
+            return;
+        }
+        requestWindows.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+        if (requestWindows.size() < MAX_TRACKED_CLIENTS) {
+            return;
+        }
+        int removeCount = requestWindows.size() - MAX_TRACKED_CLIENTS + 1;
+        requestWindows.entrySet().stream()
+            .sorted(Comparator.comparing(entry -> entry.getValue().windowStart()))
+            .limit(removeCount)
+            .map(Map.Entry::getKey)
+            .toList()
+            .forEach(requestWindows::remove);
     }
 
     private int normalizeMaxRequests(int maxRequests) {
@@ -146,6 +166,10 @@ public class RateLimitService {
         
         public boolean isExpired(Instant now) {
             return now.isAfter(windowStart.plus(window.multipliedBy(2)));
+        }
+
+        public Instant windowStart() {
+            return windowStart;
         }
     }
 }

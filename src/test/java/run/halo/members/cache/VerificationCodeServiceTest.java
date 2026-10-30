@@ -16,4 +16,16 @@ class VerificationCodeServiceTest {
         assertTrue(service.verifyCode("member@example.com:10001", code));
         assertFalse(service.verifyCode("member@example.com:10001", code));
     }
+
+    @Test
+    void invalidateLetsTheUserRequestANewCodeAfterTheMailFailed() {
+        VerificationCodeService service = new VerificationCodeService();
+        String key = "member@example.com:10001";
+        service.generateCode(key);
+
+        assertTrue(service.hasValidCode(key));
+        service.invalidate(key);
+        assertFalse(service.hasValidCode(key));
+        assertFalse(service.verifyCode(key, "000000"));
+    }
 }

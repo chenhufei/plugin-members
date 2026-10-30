@@ -141,7 +141,7 @@ function handleDeleteGroup({ deleteMembers }: { deleteMembers: boolean }) {
             {{ group?.spec?.displayName || "未分组" }}（{{ members.length }}）
           </div>
           <!-- 批量选择模式 -->
-          <VSpace v-if="enabledSelect" class=":uno: flex-wrap">
+          <VSpace v-if="enabledSelect" v-permission="['plugin:members:manage']" class=":uno: flex-wrap">
             <VButton size="sm" @click="handleSelectAll">全选</VButton>
             <VButton size="sm" @click="selectedMemberNames.length = 0">清空</VButton>
             <VDropdown>
@@ -161,7 +161,7 @@ function handleDeleteGroup({ deleteMembers }: { deleteMembers: boolean }) {
             <VButton size="sm" @click="enabledSelect = false">取消</VButton>
           </VSpace>
           <!-- 普通模式 -->
-          <VSpace v-else class=":uno: flex-wrap">
+          <VSpace v-else v-permission="['plugin:members:manage']" class=":uno: flex-wrap">
             <VDropdown v-if="members.length || group">
               <VButton size="sm" ghost aria-label="打开分组操作"><IconMore /></VButton>
               <template #popper>
@@ -179,7 +179,7 @@ function handleDeleteGroup({ deleteMembers }: { deleteMembers: boolean }) {
           </VSpace>
         </div>
         <div>
-          <VButton type="secondary" size="sm" @click="creationModalVisible = true">新建</VButton>
+          <VButton v-permission="['plugin:members:manage']" type="secondary" size="sm" @click="creationModalVisible = true">新建</VButton>
         </div>
       </div>
     </template>
