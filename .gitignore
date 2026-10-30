@@ -10,6 +10,10 @@ target/
 !gradle-wrapper.jar
 *.tsbuildinfo
 
+# 前端构建生成物：由 Gradle 关联的 UI 构建任务重新生成，不入库
+/src/main/resources/console/
+/src/main/resources/fonts/
+
 # IDE files
 .vscode/
 .idea/
@@ -38,6 +42,12 @@ logs/
 *.tmp
 *.temp
 temp/
+
+# 本地快捷方式与编译诊断输出
+*.lnk
+compile*.txt
+diag.txt
+test1.txt
 
 # Kiro
 .kiro/
