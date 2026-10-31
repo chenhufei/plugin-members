@@ -6,9 +6,10 @@ plugins {
 }
 
 group 'run.halo.members'
-version '1.14.6'
+version '1.15.0'
 
 repositories {
+    maven { url 'https://maven.aliyun.com/repository/public' }
     mavenCentral()
 }
 
@@ -19,10 +20,16 @@ dependencies {
     // MCP Server API 只能编译期依赖：运行时由 mcp-server 插件提供，打进包会造成类冲突。
     compileOnly 'run.halo.mcpserver:api:1.3.0'
 
+    // AI Foundation SDK 同样只做编译期依赖：运行时由 ai-foundation 插件提供。
+    // 站点未安装 AI Foundation 时，引用它的 Bean 由 @ConditionalOnClass 跳过注册。
+    compileOnly 'run.halo.aifoundation:api:1.0.0'
+
     testImplementation 'run.halo.app:api'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testCompileOnly 'run.halo.mcpserver:api:1.3.0'
     testRuntimeOnly 'run.halo.mcpserver:api:1.3.0'
+    testCompileOnly 'run.halo.aifoundation:api:1.0.0'
+    testRuntimeOnly 'run.halo.aifoundation:api:1.0.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

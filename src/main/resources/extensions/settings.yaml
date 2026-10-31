@@ -164,17 +164,17 @@ spec:
           label: 认领自动通过
           help: 开启后成员自助补全 QQ 链接立即生效；关闭时需管理员在后台审核通过后才显示
           value: false
-        - $formkit: switch
-          id: enableClaimCaptcha
-          name: enableClaimCaptcha
-          key: enableClaimCaptcha
-          label: 认领需要图形验证码
-          help: 关闭后可跳过图形验证码，但需配合关闭邮箱验证码使用；建议至少保留其中一项
-          value: true
-        - $formkit: switch
-          id: enableClaimEmail
-          name: enableClaimEmail
-          key: enableClaimEmail
-          label: 认领需要邮箱验证码
-          help: 关闭后跳过邮箱/验证码流程；如需邮箱登录请使用上方「管理员分发认领链接」功能
-          value: true
+        - $formkit: select
+          id: claimVerifyMode
+          name: claimVerifyMode
+          key: claimVerifyMode
+          label: 认领验证方式
+          help: 成员自助认领时使用的验证方式；建议至少保留一种验证，全部关闭会降低防滥用能力
+          options:
+            - label: 图形验证码
+              value: captcha
+            - label: 邮箱验证码
+              value: email
+            - label: 关闭验证
+              value: none
+          value: email

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -82,6 +83,10 @@ public class MemberClaimEndpoint implements CustomEndpoint {
             .POST("/plugins/PluginMembers/claim", this::claimByQq,
                 builder -> builder.operationId("ClaimByQq")
                     .description("Self-service claim: member enters QQ number and qqFriendLink")
+                    .tag(tag))
+            .GET("/plugins/PluginMembers/claim/verification-mode", this::getClaimVerificationMode,
+                builder -> builder.operationId("GetClaimVerificationMode")
+                    .description("Get verification mode used by self-service claim")
                     .tag(tag))
             .GET("/plugins/PluginMembers/claim/{token}", this::getClaimInfo,
                 builder -> builder.operationId("GetClaimInfo")
@@ -191,6 +196,13 @@ public class MemberClaimEndpoint implements CustomEndpoint {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
+    private Mono<ServerResponse> getClaimVerificationMode(ServerRequest request) {
+        return settingConfigMember.getBasicConfig()
+            .flatMap(config -> ServerResponse.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("mode", config.effectiveClaimVerifyMode())));
+    }
+
     private Mono<ServerResponse> claimByQq(ServerRequest request) {
         return request.bodyToMono(ClaimByQqRequest.class)
             .flatMap(body -> {
@@ -216,8 +228,9 @@ public class MemberClaimEndpoint implements CustomEndpoint {
 
                 return settingConfigMember.getBasicConfig()
                     .flatMap(config -> {
-                        // 图形验证码校验（可选）
-                        if (config.isEnableClaimCaptcha()) {
+                        String verifyMode = config.effectiveClaimVerifyMode();
+                        // 图形验证码校验（按设置）
+                        if ("captcha".equals(verifyMode)) {
                             String cid = body.captchaChallengeId() == null ? "" : body.captchaChallengeId().trim();
                             String cc = body.captchaCode() == null ? "" : body.captchaCode().trim();
                             if (!cid.isBlank() && !cc.isBlank()) {
@@ -232,7 +245,7 @@ public class MemberClaimEndpoint implements CustomEndpoint {
                         // 邮箱验证码校验（可选）
                         return findMemberByQq(qq)
                             .flatMap(member -> {
-                                if (config.isEnableClaimEmail()) {
+                                if ("email".equals(verifyMode)) {
                                     String manualEmail = body.email() == null ? "" : body.email().trim();
                                     String verificationEmail = claimVerificationEmail(member, manualEmail, qq);
                                     if (verificationEmail == null) {

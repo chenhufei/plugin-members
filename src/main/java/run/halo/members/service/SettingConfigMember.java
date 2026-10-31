@@ -30,8 +30,25 @@ public interface SettingConfigMember {
         private String blockedUserAgentKeywords;
         private boolean rejectMissingUserAgent;
         private boolean autoApproveClaim = false;
+        private String claimVerifyMode;
+        // 旧字段仅用于配置迁移，新配置请使用 claimVerifyMode
         private boolean enableClaimCaptcha = true;
         private boolean enableClaimEmail = true;
+
+        /**
+         * 认领验证方式：captcha / email / none。
+         * 优先使用新配置；旧配置按此前认领前端仅实现邮箱验证码的实际情况迁移，
+         * 避免升级后既有站点突然要求无法完成的图形验证码。
+         */
+        public String effectiveClaimVerifyMode() {
+            if (claimVerifyMode != null && !claimVerifyMode.isBlank()) {
+                return claimVerifyMode;
+            }
+            if (!enableClaimCaptcha && !enableClaimEmail) {
+                return "none";
+            }
+            return "email";
+        }
 
         public int normalizedMaxRequestsPerMinute() {
             if (maxRequestsPerMinute == null || maxRequestsPerMinute < 1) {
@@ -69,6 +86,7 @@ public interface SettingConfigMember {
         private String blockedUserAgentKeywords;
         private boolean rejectMissingUserAgent;
         private boolean autoApproveClaim = false;
+        private String claimVerifyMode;
         private boolean enableClaimCaptcha = true;
         private boolean enableClaimEmail = true;
     }
