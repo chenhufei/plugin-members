@@ -43,6 +43,39 @@
 
 ## 协作者接入
 
-1. 分别 clone 三个仓库。
-2. 主题需 Node.js ≥ 22.12；插件需 JDK + Gradle（用仓库自带 `./gradlew`，无需全局安装）。
-3. 阅读各仓库 README 与根目录 `AGENTS.md` / `ARCHITECTURE.md`。
+### 仓库地址
+
+| 平台 | 本仓库地址 | 用途 |
+|---|---|---|
+| **Gitee（主）** | `https://gitee.com/xiui-cc/plugin-members.git` | 日常协作，分支与 PR 都在这里 |
+| GitHub（镜像） | `https://github.com/chenhufei/plugin-members.git` | 只读分发，由 Gitee 镜像自动同步 |
+
+> **只在 Gitee 提 PR。** GitHub 端由 Gitee 的 Push 镜像强制覆盖，直接推到 GitHub 的提交会在下次同步时被冲掉。
+
+同级的另外两个仓库：
+
+- `https://gitee.com/xiui-cc/theme-nucma.git`
+- `https://gitee.com/xiui-cc/plugin-link-submit-next.git`
+
+### 步骤
+
+1. 在 Gitee 上申请本仓库协作者权限（由维护者在「仓库 → 管理 → 仓库成员管理」邀请，角色选**开发者**），或直接 fork。
+2. 把三个仓库 clone 到**同一父目录**（三者互不嵌套，但联调时需要并排放置）：
+
+   ```bash
+   git clone https://gitee.com/xiui-cc/theme-nucma.git
+   git clone https://gitee.com/xiui-cc/plugin-members.git
+   git clone https://gitee.com/xiui-cc/plugin-link-submit-next.git
+   ```
+
+   Windows 下可用工作区脚本一次拉齐：`.\scripts\clone-all.ps1 -Owner xiui-cc`
+
+3. 环境要求：主题需 Node.js ≥ 22.12；插件需 JDK 21（用仓库自带的 `./gradlew`，无需全局安装 Gradle）。
+4. 可选：挂一个 GitHub 远程，方便对照上游
+
+   ```bash
+   git remote add github https://github.com/chenhufei/plugin-members.git
+   ```
+
+5. 通读本文件与仓库 README。`AGENTS.md` / `ARCHITECTURE.md` 位于维护者的主工作区，不随本仓库分发；其核心约束已在前面的「防冲突铁律」中列出。
+
