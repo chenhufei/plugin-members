@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 import run.halo.app.plugin.ReactiveSettingFetcher;
 import run.halo.members.service.SettingConfigMember;
+import run.halo.members.service.SettingConfigMember.AffinityGroupConfig;
 import run.halo.members.service.SettingConfigMember.BasicGroupConfig;
 import run.halo.members.service.SettingConfigMember.NotificationGroupConfig;
 import run.halo.members.service.SettingConfigMember.SecurityGroupConfig;
@@ -28,9 +29,10 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
                 settingFetcher.fetch(BasicGroupConfig.GROUP, BasicGroupConfig.class)
                     .defaultIfEmpty(new BasicGroupConfig()),
                 optionalGroup(NotificationGroupConfig.GROUP, NotificationGroupConfig.class),
-                optionalGroup(SecurityGroupConfig.GROUP, SecurityGroupConfig.class)
+                optionalGroup(SecurityGroupConfig.GROUP, SecurityGroupConfig.class),
+                optionalGroup(AffinityGroupConfig.GROUP, AffinityGroupConfig.class)
             )
-            .map(tuple -> merge(tuple.getT1(), tuple.getT2(), tuple.getT3()));
+            .map(tuple -> merge(tuple.getT1(), tuple.getT2(), tuple.getT3(), tuple.getT4()));
     }
 
     private <T> Mono<Optional<T>> optionalGroup(String group, Class<T> type) {
@@ -41,7 +43,8 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
 
     private BasicConfig merge(BasicGroupConfig basic,
                               Optional<NotificationGroupConfig> notification,
-                              Optional<SecurityGroupConfig> security) {
+                              Optional<SecurityGroupConfig> security,
+                              Optional<AffinityGroupConfig> affinity) {
         var config = new BasicConfig();
         config.setAutoApprove(basic.isAutoApprove());
         config.setAutoApproveWithdraw(basic.isAutoApproveWithdraw());
@@ -76,8 +79,18 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
             ? securityConfig.isRejectMissingUserAgent() : basic.isRejectMissingUserAgent());
         // 认领专用配置：默认从 basic 组读取
         config.setAutoApproveClaim(basic.isAutoApproveClaim());
+        // 认领验证方式必须显式透传，否则 effectiveClaimVerifyMode() 只能走旧字段迁移分支，
+        // 导致后台选择的 captcha / none 不生效。
+        config.setClaimVerifyMode(basic.getClaimVerifyMode());
         config.setEnableClaimCaptcha(basic.isEnableClaimCaptcha());
         config.setEnableClaimEmail(basic.isEnableClaimEmail());
+
+        // 学校关联分析：独立设置组，缺省为关闭
+        var affinityConfig = affinity.orElse(null);
+        config.setAffinityEnabled(affinityConfig != null && affinityConfig.isAffinityEnabled());
+        config.setAffinityAspects(affinityConfig == null ? null : affinityConfig.getAffinityAspects());
+        config.setAffinityMaxLinks(affinityConfig == null
+            ? 12 : affinityConfig.getAffinityMaxLinks());
 
         return config;
     }

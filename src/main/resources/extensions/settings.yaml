@@ -178,3 +178,42 @@ spec:
             - label: 关闭验证
               value: none
           value: email
+
+    - group: affinity
+      label: 学校关联分析
+      formSchema:
+        - $formkit: switch
+          id: affinityEnabled
+          name: affinityEnabled
+          key: affinityEnabled
+          label: 启用学校关联分析
+          help: 开启后，成员星球视图会调用 AI Foundation 的默认语言模型，判断成员所属学校之间是否存在关联，并以粗细不同的连线呈现。需先安装并启用 AI Foundation 并配置默认模型；分析结果缓存 30 分钟，关闭后立即停止调用。
+          value: false
+        - $formkit: select
+          id: affinityAspects
+          name: affinityAspects
+          key: affinityAspects
+          label: 分析维度
+          multiple: true
+          clearable: true
+          help: 选择需要模型判断的关联类型，未选中的维度不会出现在分析提示词中；全部清空时默认三类全开。
+          options:
+            - label: 合作关系（联合办学、共建项目、学术或赛事合作）
+              value: cooperation
+            - label: 地域/机构关联（同城、同一教育集团、同一主管部门）
+              value: region
+            - label: 共同的小组织（联盟、协会、社团、校友会）
+              value: organization
+          value:
+            - cooperation
+            - region
+            - organization
+        - $formkit: number
+          id: affinityMaxLinks
+          name: affinityMaxLinks
+          key: affinityMaxLinks
+          label: 最多连线数
+          help: 限制返回给星球的关联边数量，避免学校较多时连线过密影响观感
+          value: 12
+          step: 1
+          validation: required|number|min:1|max:40

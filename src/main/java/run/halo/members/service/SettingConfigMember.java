@@ -1,5 +1,7 @@
 package run.halo.members.service;
 
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Data;
 import reactor.core.publisher.Mono;
 
@@ -34,6 +36,43 @@ public interface SettingConfigMember {
         // 旧字段仅用于配置迁移，新配置请使用 claimVerifyMode
         private boolean enableClaimCaptcha = true;
         private boolean enableClaimEmail = true;
+
+        /** 学校关联分析：总开关。关闭时不调用任何大模型。 */
+        private boolean affinityEnabled = false;
+        /** 参与分析的关联维度，取值见 AFFINITY_ASPECT_KEYS。 */
+        private String[] affinityAspects;
+        /** 返回给前端的最大连线数。 */
+        private Integer affinityMaxLinks = 12;
+
+        /** 支持的关联维度：合作、地域/机构关联、共同小组织。 */
+        public static final List<String> AFFINITY_ASPECT_KEYS =
+            List.of("cooperation", "region", "organization");
+
+        /**
+         * 参与分析的关联维度。未配置或配置全部非法时回退为三类全开，
+         * 避免因后台选项被清空导致分析结果为空。
+         */
+        public List<String> effectiveAffinityAspects() {
+            if (affinityAspects == null || affinityAspects.length == 0) {
+                return AFFINITY_ASPECT_KEYS;
+            }
+            var valid = new ArrayList<String>();
+            for (String aspect : affinityAspects) {
+                if (aspect != null && AFFINITY_ASPECT_KEYS.contains(aspect)
+                    && !valid.contains(aspect)) {
+                    valid.add(aspect);
+                }
+            }
+            return valid.isEmpty() ? AFFINITY_ASPECT_KEYS : List.copyOf(valid);
+        }
+
+        /** 返回给前端的最大连线数，收敛到 1-40。 */
+        public int effectiveAffinityMaxLinks() {
+            if (affinityMaxLinks == null || affinityMaxLinks < 1) {
+                return 12;
+            }
+            return Math.min(affinityMaxLinks, 40);
+        }
 
         /**
          * 认领验证方式：captcha / email / none。
@@ -110,5 +149,19 @@ public interface SettingConfigMember {
         private String blockedIpList = "";
         private String blockedUserAgentKeywords = "";
         private boolean rejectMissingUserAgent;
+    }
+
+    /**
+     * 学校关联分析（成员星球连线）的独立设置组。
+     *
+     * <p>单独成组，便于管理员明确「这是一项会调用大模型的能力」而独立开关，
+     * 不与安全/通知类配置混在一起。</p>
+     */
+    @Data
+    class AffinityGroupConfig {
+        public static final String GROUP = "affinity";
+        private boolean affinityEnabled = false;
+        private String[] affinityAspects;
+        private Integer affinityMaxLinks = 12;
     }
 }

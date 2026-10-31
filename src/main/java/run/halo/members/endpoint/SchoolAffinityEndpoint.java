@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -21,11 +22,20 @@ import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.members.Member;
 import run.halo.members.service.SchoolAffinityService;
+import run.halo.members.service.SchoolAffinityService.AffinityOptions;
+import run.halo.members.service.SettingConfigMember;
 
 /**
- * 成员星球视图的数据接口：分析成员所属学校之间的关联，供前端连线使用。
+ * 成员星球视图的数据接口：分析成员所属学校之间的关联，供前端连线与依据面板使用。
  *
- * <p>AI Foundation 未安装时返回空连线，前端静默降级为不画线。</p>
+ * <p>响应结构：</p>
+ * <ul>
+ *   <li>{@code enabled}：后台是否开启该能力（关闭时不产生任何大模型调用）</li>
+ *   <li>{@code reason}：没有连线时的原因（disabled-by-admin / ai-unavailable /
+ *       not-enough-schools）</li>
+ *   <li>{@code links}：关联边，含 a、b、strength、category、reason</li>
+ *   <li>{@code meta}：分析维度、学校数、连线上限等，便于前端如实展示「分析口径」</li>
+ * </ul>
  *
  * @since 1.15.0
  */
@@ -39,6 +49,7 @@ public class SchoolAffinityEndpoint implements CustomEndpoint {
 
     private final ReactiveExtensionClient client;
     private final ObjectProvider<SchoolAffinityService> affinityService;
+    private final SettingConfigMember settingConfigMember;
 
     private volatile CachedResult cache;
 
@@ -59,26 +70,40 @@ public class SchoolAffinityEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> getAffinity(ServerRequest request) {
-        var service = affinityService.getIfAvailable();
-        if (service == null) {
-            return json(emptyBody("ai-unavailable"));
-        }
-        var cached = cache;
-        if (cached != null && Instant.now().isBefore(cached.expiresAt())) {
-            return json(cached.body());
-        }
-        return listSchools()
-            .flatMap(schools -> {
-                if (schools.size() < 2) {
-                    return Mono.just(emptyBody("not-enough-schools"));
+        return settingConfigMember.getBasicConfig()
+            .flatMap(config -> {
+                if (!config.isAffinityEnabled()) {
+                    return Mono.just(body(false, "disabled-by-admin", List.of(), null));
                 }
-                return service.analyze(schools)
-                    .map(links -> {
-                        var body = new LinkedHashMap<String, Object>();
-                        body.put("links", links);
-                        body.put("schools", schools);
-                        cache = new CachedResult(body, Instant.now().plus(CACHE_TTL));
-                        return body;
+                var service = affinityService.getIfAvailable();
+                if (service == null) {
+                    return Mono.just(body(false, "ai-unavailable", List.of(), null));
+                }
+                var aspects = config.effectiveAffinityAspects();
+                var maxLinks = config.effectiveAffinityMaxLinks();
+                var signature = String.join(",", aspects) + "|" + maxLinks;
+
+                var cached = cache;
+                if (cached != null && signature.equals(cached.signature())
+                    && Instant.now().isBefore(cached.expiresAt())) {
+                    return Mono.just(cached.body());
+                }
+
+                var options = new AffinityOptions(Set.copyOf(aspects), maxLinks);
+                return listSchools()
+                    .flatMap(schools -> {
+                        var meta = meta(schools, aspects, maxLinks);
+                        if (schools.size() < 2) {
+                            return Mono.just(
+                                body(true, "not-enough-schools", List.of(), meta));
+                        }
+                        return service.analyze(schools, options)
+                            .map(links -> body(true, null, links, meta));
+                    })
+                    .map(result -> {
+                        cache = new CachedResult(result, signature,
+                            Instant.now().plus(CACHE_TTL));
+                        return result;
                     });
             })
             .flatMap(this::json);
@@ -97,11 +122,27 @@ public class SchoolAffinityEndpoint implements CustomEndpoint {
             .map(list -> list.size() > MAX_SCHOOLS ? list.subList(0, MAX_SCHOOLS) : list);
     }
 
-    private Map<String, Object> emptyBody(String reason) {
+    private Map<String, Object> body(boolean enabled, String reason, List<?> links,
+                                     Map<String, Object> meta) {
         var body = new LinkedHashMap<String, Object>();
-        body.put("links", List.of());
-        body.put("reason", reason);
+        body.put("enabled", enabled);
+        body.put("generatedAt", Instant.now().toString());
+        if (reason != null) {
+            body.put("reason", reason);
+        }
+        body.put("links", links == null ? List.of() : links);
+        if (meta != null) {
+            body.put("meta", meta);
+        }
         return body;
+    }
+
+    private Map<String, Object> meta(List<String> schools, List<String> aspects, int maxLinks) {
+        var meta = new LinkedHashMap<String, Object>();
+        meta.put("schoolCount", schools.size());
+        meta.put("aspects", aspects);
+        meta.put("maxLinks", maxLinks);
+        return meta;
     }
 
     private Mono<ServerResponse> json(Map<String, Object> body) {
@@ -110,6 +151,7 @@ public class SchoolAffinityEndpoint implements CustomEndpoint {
             .bodyValue(body);
     }
 
-    private record CachedResult(Map<String, Object> body, Instant expiresAt) {
+    private record CachedResult(Map<String, Object> body, String signature,
+                                Instant expiresAt) {
     }
 }
