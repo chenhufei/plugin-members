@@ -4,12 +4,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Comparator;
 
 import org.springframework.stereotype.Service;
 
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.scheduler.Schedulers;
 
 /**
  * API频率限制服务
@@ -23,7 +25,9 @@ import lombok.extern.slf4j.Slf4j;
 public class RateLimitService {
     
     private final Map<String, RequestWindow> requestWindows = new ConcurrentHashMap<>();
-    
+
+    private final AtomicBoolean pruneScheduled = new AtomicBoolean(false);
+
     // 默认配置：每分钟最多10次请求
     private static final int DEFAULT_MAX_REQUESTS = 10;
     private static final int MAX_REQUESTS_LIMIT = 1000;
@@ -57,7 +61,10 @@ public class RateLimitService {
         }
         
         Instant now = Instant.now();
-        pruneIfNeeded(now);
+        // 判定路径上只做 O(1) 的容量检查：对上万条窗口做排序不能在事件循环里做
+        if (requestWindows.size() >= MAX_TRACKED_CLIENTS) {
+            schedulePrune();
+        }
         int normalizedMaxRequests = normalizeMaxRequests(maxRequests);
         Duration normalizedWindow = normalizeWindow(window);
         RequestWindow requestWindow = requestWindows.compute(clientId, (key, existingWindow) -> {
@@ -94,6 +101,25 @@ public class RateLimitService {
         Instant now = Instant.now();
         requestWindows.entrySet().removeIf(entry -> 
             entry.getValue().isExpired(now));
+    }
+
+    /**
+     * 把淘汰搬到 boundedElastic 上执行，并用标志位合并并发请求：
+     * 表满时每个请求各自排一次序，会把限流本身变成 CPU 放大器。
+     */
+    private void schedulePrune() {
+        if (!pruneScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Schedulers.boundedElastic().schedule(() -> {
+            try {
+                pruneIfNeeded(Instant.now());
+            } catch (RuntimeException e) {
+                log.warn("Failed to prune rate limit windows", e);
+            } finally {
+                pruneScheduled.set(false);
+            }
+        });
     }
 
     private void pruneIfNeeded(Instant now) {

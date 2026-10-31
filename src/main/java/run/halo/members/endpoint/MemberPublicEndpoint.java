@@ -70,7 +70,8 @@ public class MemberPublicEndpoint implements CustomEndpoint {
         final Integer size;
         try {
             page = queryInt(request, "page", 1, 1, 1_000_000);
-            size = queryInt(request, "size", null, 1, 100);
+            // 匿名接口必须给出保守的默认值：不传 size 时不能一路透传到「全量返回」
+            size = queryInt(request, "size", 50, 1, 100);
         } catch (IllegalArgumentException e) {
             return ServerResponse.badRequest()
                 .bodyValue(new ErrorResponse(e.getMessage()));

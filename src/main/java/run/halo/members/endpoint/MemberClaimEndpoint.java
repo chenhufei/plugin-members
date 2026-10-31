@@ -31,6 +31,7 @@ import run.halo.app.notification.NotificationReasonEmitter;
 import run.halo.app.notification.UserIdentity;
 import run.halo.app.plugin.ApiVersion;
 import run.halo.members.Member;
+import run.halo.members.MemberGroup;
 import run.halo.members.NotificationReasonPublisher;
 import run.halo.members.cache.VerificationCodeService;
 import run.halo.members.security.RateLimitService;
@@ -484,54 +485,97 @@ public class MemberClaimEndpoint implements CustomEndpoint {
                 var spec = member.getSpec();
                 return spec.getQqFriendLink() == null || spec.getQqFriendLink().isBlank();
             }, null)
-            .map(member -> {
-                var spec = member.getSpec();
-                String qq = spec.getQq() != null ? spec.getQq() : "";
-                String target = EmailUtils.resolveEmail(spec.getEmail(), qq);
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("memberName", member.getMetadata().getName());
-                item.put("displayName", spec.getDisplayName() != null ? spec.getDisplayName() : "");
-                item.put("qq", qq);
-                item.put("school", spec.getSchool() != null ? spec.getSchool() : "");
-                item.put("hasEmail", StringUtils.isNotBlank(spec.getEmail()));
-                item.put("emailSource", StringUtils.isNotBlank(spec.getEmail())
-                    ? "MEMBER" : (target.isEmpty() ? "NONE" : "QQ"));
-                item.put("targetEmail", EmailUtils.mask(target));
-                item.put("groupName", spec.getGroupName() != null ? spec.getGroupName() : "");
-                return item;
-            })
             .collectList()
+            .flatMap(members -> resolveGroupLabels(members).map(groupLabels -> members.stream()
+                .map(member -> {
+                    var spec = member.getSpec();
+                    String qq = spec.getQq() != null ? spec.getQq() : "";
+                    String target = EmailUtils.resolveEmail(spec.getEmail(), qq);
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("memberName", member.getMetadata().getName());
+                    item.put("displayName", spec.getDisplayName() != null ? spec.getDisplayName() : "");
+                    item.put("qq", qq);
+                    item.put("school", spec.getSchool() != null ? spec.getSchool() : "");
+                    item.put("hasEmail", StringUtils.isNotBlank(spec.getEmail()));
+                    item.put("emailSource", StringUtils.isNotBlank(spec.getEmail())
+                        ? "MEMBER" : (target.isEmpty() ? "NONE" : "QQ"));
+                    item.put("targetEmail", EmailUtils.mask(target));
+                    putGroup(item, spec, groupLabels);
+                    return item;
+                })
+                .toList()
+            ))
             .flatMap(items -> ServerResponse.ok().bodyValue(Map.of("items", items)));
     }
 
     private Mono<ServerResponse> listClaims(ServerRequest request) {
         return client.list(Member.class, member -> {
                 var annotations = member.getMetadata().getAnnotations();
-                return annotations != null 
+                return annotations != null
                     && annotations.containsKey("member.plugin.halo.run/claim-token");
             }, null)
-            .map(member -> {
-                var annotations = member.getMetadata().getAnnotations();
-                String token = annotations.get("member.plugin.halo.run/claim-token");
-                String expiresStr = annotations.get("member.plugin.halo.run/claim-token-expires");
-                Instant expires = null;
-                if (expiresStr != null) {
-                    try {
-                        expires = Instant.parse(expiresStr);
-                    } catch (Exception ignored) {}
-                }
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("memberName", member.getMetadata().getName());
-                item.put("displayName", member.getSpec().getDisplayName());
-                item.put("qq", member.getSpec().getQq());
-                item.put("token", token);
-                item.put("claimUrl", buildClaimUrl(token));
-                item.put("expiresAt", expires != null ? expires.toString() : null);
-                item.put("expired", expires != null && Instant.now().isAfter(expires));
-                return item;
-            })
             .collectList()
+            .flatMap(members -> resolveGroupLabels(members).map(groupLabels -> members.stream()
+                .map(member -> {
+                    var annotations = member.getMetadata().getAnnotations();
+                    String token = annotations.get("member.plugin.halo.run/claim-token");
+                    String expiresStr = annotations.get("member.plugin.halo.run/claim-token-expires");
+                    Instant expires = null;
+                    if (expiresStr != null) {
+                        try {
+                            expires = Instant.parse(expiresStr);
+                        } catch (Exception ignored) {}
+                    }
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("memberName", member.getMetadata().getName());
+                    item.put("displayName", member.getSpec().getDisplayName());
+                    item.put("qq", member.getSpec().getQq());
+                    item.put("token", token);
+                    item.put("claimUrl", buildClaimUrl(token));
+                    item.put("expiresAt", expires != null ? expires.toString() : null);
+                    item.put("expired", expires != null && Instant.now().isAfter(expires));
+                    putGroup(item, member.getSpec(), groupLabels);
+                    return item;
+                })
+                .toList()
+            ))
             .flatMap(items -> ServerResponse.ok().bodyValue(Map.of("items", items)));
+    }
+
+    /**
+     * 一次性解析这批成员所属分组的展示名，避免在成员循环里逐个查分组造成 N+1。
+     */
+    private Mono<Map<String, String>> resolveGroupLabels(List<Member> members) {
+        List<String> groupNames = members.stream()
+            .map(member -> member.getSpec() == null ? null : member.getSpec().getGroupName())
+            .filter(StringUtils::isNotBlank)
+            .distinct()
+            .toList();
+        if (groupNames.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+        return client.list(MemberGroup.class,
+                group -> groupNames.contains(group.getMetadata().getName()), null)
+            .collectMap(group -> group.getMetadata().getName(),
+                group -> group.getSpec() == null || StringUtils.isBlank(group.getSpec().getDisplayName())
+                    ? "" : group.getSpec().getDisplayName())
+            .defaultIfEmpty(Map.of());
+    }
+
+    /**
+     * 分组展示名优先取分组的 displayName，缺失时回退到分组标识，两者都没有则视为未分组。
+     */
+    private void putGroup(Map<String, Object> item, Member.MemberSpec spec,
+        Map<String, String> groupLabels) {
+        if (spec == null) {
+            item.put("groupName", "");
+            item.put("groupDisplayName", "");
+            return;
+        }
+        String groupName = StringUtils.isNotBlank(spec.getGroupName()) ? spec.getGroupName() : "";
+        String displayName = groupName.isEmpty() ? "" : groupLabels.get(groupName);
+        item.put("groupName", groupName);
+        item.put("groupDisplayName", StringUtils.isNotBlank(displayName) ? displayName : "");
     }
 
     private Mono<ServerResponse> generateClaims(ServerRequest request) {

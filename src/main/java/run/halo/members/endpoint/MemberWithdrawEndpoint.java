@@ -39,6 +39,7 @@ import reactor.core.publisher.Mono;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.scheduler.Schedulers;
 import run.halo.members.utils.EmailUtils;
+import run.halo.members.utils.RequestUtils;
 import static run.halo.members.MemberConstant.*;
 
 /**
@@ -50,6 +51,9 @@ import static run.halo.members.MemberConstant.*;
 @ApiVersion("api.plugin.halo.run/v1alpha1")
 @RequestMapping("/plugins/PluginMembers/membersubmits")
 public class MemberWithdrawEndpoint {
+
+    /** 撤回原因上限：原因会写入成员注解并进入通知正文 */
+    static final int MAX_REASON_LENGTH = 200;
 
     private final ExtensionClient client;
     private final VerificationCodeService codeService;
@@ -66,7 +70,8 @@ public class MemberWithdrawEndpoint {
      */
     @PostMapping("/-/send-verification-code")
     public Mono<ResponseEntity<Object>> sendVerificationCode(
-            @RequestBody WithdrawRequest request) {
+            @RequestBody WithdrawRequest request,
+            org.springframework.http.server.reactive.ServerHttpRequest httpRequest) {
 
         if (StringUtils.isEmpty(request.email) || StringUtils.isEmpty(request.qq)) {
             return Mono.just(problem(HttpStatus.BAD_REQUEST, "invalid-withdraw-request",
@@ -74,8 +79,16 @@ public class MemberWithdrawEndpoint {
         }
         String email = request.email.trim().toLowerCase();
         String qq = request.qq.trim();
+        // 每个 QQ+邮箱 10 分钟 3 次；同一出口 IP 再做一层限制，
+        // 否则换 QQ 号就能绕过，邮件通知变成向任意邮箱投递的入口
         if (!rateLimitService.isRequestAllowed("withdraw-code:" + email + ":" + qq,
             3, Duration.ofMinutes(10))) {
+            return Mono.just(problem(HttpStatus.TOO_MANY_REQUESTS, "request-not-permitted",
+                "请求过于频繁", "验证码发送过于频繁，请稍后再试"));
+        }
+        String clientIp = RequestUtils.getClientIP(httpRequest);
+        if (!rateLimitService.isRequestAllowed("withdraw-code-ip:" + clientIp,
+            10, Duration.ofMinutes(10))) {
             return Mono.just(problem(HttpStatus.TOO_MANY_REQUESTS, "request-not-permitted",
                 "请求过于频繁", "验证码发送过于频繁，请稍后再试"));
         }
@@ -111,7 +124,14 @@ public class MemberWithdrawEndpoint {
                     "成员状态不允许撤回", "该成员暂无申请记录，无法撤回");
             }
 
-            String code = codeService.generateCode(verificationKey(email, qq));
+            String key = verificationKey(email, qq);
+            // 已存在未失效的验证码时直接复用，不再重发：
+            // 否则刷新界面就能反复触发发信，把验证码接口变成向任意邮箱投递的入口
+            if (codeService.hasValidCode(key)) {
+                return problem(HttpStatus.TOO_MANY_REQUESTS, "verification-code-already-sent",
+                    "验证码已发送", "验证码已在有效期内发送过，请查收邮件或稍后重试");
+            }
+            String code = codeService.generateCode(key);
             try {
                 publishVerificationCode(member, email, code);
             } catch (RuntimeException error) {
@@ -142,7 +162,12 @@ public class MemberWithdrawEndpoint {
         String email = request.email.trim().toLowerCase();
         String code = request.code.trim();
         String qq = request.qq.trim();
-        String reason = request.reason;
+        // 撤回原因会落到注解并出现在通知正文里，先夹到 200 字以内，避免超长内容撑爆注解
+        String reason = request.reason == null ? "" : request.reason.trim();
+        if (reason.length() > MAX_REASON_LENGTH) {
+            return Mono.just(problem(HttpStatus.BAD_REQUEST, "invalid-withdraw-request",
+                "撤回请求内容无效", "撤回原因请控制在 " + MAX_REASON_LENGTH + " 字以内"));
+        }
         String verificationKey = verificationKey(email, qq);
         if (!rateLimitService.isRequestAllowed("withdraw-verify:" + verificationKey,
             10, Duration.ofMinutes(10))) {

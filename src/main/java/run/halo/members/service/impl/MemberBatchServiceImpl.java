@@ -5,6 +5,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.extension.MetadataUtil;
 import run.halo.members.Member;
@@ -221,7 +223,7 @@ public class MemberBatchServiceImpl implements MemberBatchService {
                 specs.add(spec);
             }
             return specs;
-        }).flatMap(specs -> {
+        }).subscribeOn(Schedulers.boundedElastic()).flatMap(specs -> {
             if (specs.isEmpty()) {
                 return Mono.just(BatchOperationResult.failed(0, "JSON数据为空"));
             }
@@ -256,7 +258,7 @@ public class MemberBatchServiceImpl implements MemberBatchService {
         log.info("从CSV批量导入成员: defaultGroup={}", defaultGroup);
         
         return Mono.fromCallable(() -> {
-            String[] lines = csvData.split("\n");
+            String[] lines = sanitizeCsvText(csvData).split("\n");
             if (lines.length < 2) {
                 throw new IllegalArgumentException("CSV数据必须包含头部和至少一行数据");
             }
@@ -292,7 +294,7 @@ public class MemberBatchServiceImpl implements MemberBatchService {
                 specs.add(spec);
             }
             return specs;
-        }).flatMap(specs -> {
+        }).subscribeOn(Schedulers.boundedElastic()).flatMap(specs -> {
             if (specs.isEmpty()) {
                 return Mono.just(BatchOperationResult.failed(0, "CSV数据为空"));
             }
@@ -322,13 +324,50 @@ public class MemberBatchServiceImpl implements MemberBatchService {
         });
     }
     
+    /**
+     * 清洗导入的 CSV 文本。
+     *
+     * <p>两件必须在这里做的事：
+     * <ol>
+     *   <li>去掉 UTF-8 BOM：Excel 导出的 CSV 首行会带 BOM，不去掉会让表头
+     *       "displayName" 匹配失败，整批数据被当成无效列丢弃。</li>
+     *   <li>把行首的 {@code = + - @} 等公式前缀转义：导入的成员信息会被导出成 CSV
+     *       再被人用 Excel 打开，这些字符在表格里会被当成公式执行（CSV 注入）。</li>
+     * </ol>
+     */
+    private static String sanitizeCsvText(String csvData) {
+        if (csvData == null || csvData.isEmpty()) {
+            return csvData;
+        }
+        String text = csvData.charAt(0) == '\ufeff' ? csvData.substring(1) : csvData;
+        return text.replace("\r\n", "\n").replace("\r", "\n");
+    }
+
+    /**
+     * 导出 CSV 时对单元格做公式前缀转义，避免导出的表格被 Excel 当成公式执行。
+     */
+    private static String escapeCsvFormula(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        char first = value.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@'
+            || first == '\t' || first == '\r') {
+            return "'" + value;
+        }
+        return value;
+    }
+
     private String generateMemberName(Member.MemberSpec spec) {
-        String base = spec.getQq() != null && !spec.getQq().isEmpty() 
-            ? spec.getQq() 
+        String base = spec.getQq() != null && !spec.getQq().isEmpty()
+            ? spec.getQq()
             : spec.getEmail() != null && !spec.getEmail().isEmpty()
                 ? spec.getEmail().replaceAll("[^a-zA-Z0-9]", "")
                 : spec.getDisplayName().replaceAll("[^a-zA-Z0-9]", "");
-        return base + "-" + System.currentTimeMillis();
+        // 毫秒时间戳不足以保证唯一：同一批导入里 QQ 相同、名字也相同的记录会撞名，
+        // 后一条直接覆盖前一条。补一段随机 UUID，批量导入才算真的"批量"。
+        return base + "-" + System.currentTimeMillis()
+            + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
     
     private String[] parseCsvLine(String line) {
@@ -364,10 +403,13 @@ public class MemberBatchServiceImpl implements MemberBatchService {
         if (value == null) {
             return "";
         }
-        // 如果包含逗号、引号或换行符，需要用引号包裹并转义引号
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
+        // 先中和公式前缀：导出的 CSV 会被人用表格软件打开，
+        // 以 = + - @ 开头的单元格在 Excel 里会被当成公式执行（CSV 注入）
+        String safe = escapeCsvFormula(value);
+        // 再处理分隔符：包含逗号、引号或换行符时用引号包裹并转义引号
+        if (safe.contains(",") || safe.contains("\"") || safe.contains("\n")) {
+            return "\"" + safe.replace("\"", "\"\"") + "\"";
         }
-        return value;
+        return safe;
     }
 }

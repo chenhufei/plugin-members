@@ -22,6 +22,8 @@ interface ClaimToken {
   claimUrl: string;
   expiresAt: string | null;
   expired: boolean;
+  groupName?: string;
+  groupDisplayName?: string;
 }
 
 interface IncompleteMember {
@@ -32,7 +34,8 @@ interface IncompleteMember {
   hasEmail: boolean;
   emailSource?: "MEMBER" | "QQ" | "NONE";
   targetEmail?: string;
-  groupName: string;
+  groupName?: string;
+  groupDisplayName?: string;
 }
 
 const queryClient = useQueryClient();
@@ -175,6 +178,10 @@ const refreshAll = () => {
   refetchIncomplete();
   refetchClaims();
 };
+
+// 分组展示名缺失时回退到分组标识，两者都没有才算未分组
+const groupLabel = (item: { groupName?: string; groupDisplayName?: string }) =>
+  item.groupDisplayName || item.groupName || "-";
 </script>
 
 <template>
@@ -274,7 +281,7 @@ const refreshAll = () => {
             </td>
             <td class="px-4 py-3 text-sm">{{ member.qq || "-" }}</td>
             <td class="px-4 py-3 text-sm">{{ member.school || "-" }}</td>
-            <td class="px-4 py-3 text-sm">{{ member.groupName || "-" }}</td>
+            <td class="px-4 py-3 text-sm">{{ groupLabel(member) }}</td>
           </tr>
         </tbody>
       </table>
@@ -312,6 +319,7 @@ const refreshAll = () => {
           <tr>
             <th class="px-4 py-3 text-left w-8"></th>
             <th class="px-4 py-3 text-left">成员</th>
+            <th class="px-4 py-3 text-left">分组</th>
             <th class="px-4 py-3 text-left">QQ</th>
             <th class="px-4 py-3 text-left">过期时间</th>
             <th class="px-4 py-3 text-left">状态</th>
@@ -331,6 +339,7 @@ const refreshAll = () => {
               <div class="font-medium">{{ claim.displayName }}</div>
               <div class="text-xs text-gray-500">{{ claim.memberName }}</div>
             </td>
+            <td class="px-4 py-3 text-sm">{{ groupLabel(claim) }}</td>
             <td class="px-4 py-3 text-sm">{{ claim.qq || "-" }}</td>
             <td class="px-4 py-3 text-sm">
               {{ claim.expiresAt ? new Date(claim.expiresAt).toLocaleString() : "-" }}
