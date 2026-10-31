@@ -272,7 +272,7 @@ public class MemberClaimEndpoint implements CustomEndpoint {
                                 }
 
                                 String profileError = applyProfile(member, body.displayName(),
-                                    body.school(), body.avatar());
+                                    body.school());
                                 if (profileError != null) {
                                     return errorResponse(400, profileError);
                                 }
@@ -348,7 +348,7 @@ public class MemberClaimEndpoint implements CustomEndpoint {
                     .flatMap(member -> {
                         var spec = member.getSpec();
                         String profileError = applyProfile(member, body.displayName(),
-                            body.school(), body.avatar());
+                            body.school());
                         if (profileError != null) {
                             return errorResponse(400, profileError);
                         }
@@ -375,7 +375,13 @@ public class MemberClaimEndpoint implements CustomEndpoint {
      *
      * @return 校验错误信息；成功时返回 null
      */
-    private String applyProfile(Member member, String displayName, String school, String avatar) {
+    /**
+     * 写入认领时允许访客修改的资料。
+     *
+     * <p>头像不再由访客提供：自定义头像功能已关闭，统一使用 QQ 头像，
+     * 因此这里忽略任何客户端传来的头像内容（也不再校验数据 URL）。
+     */
+    private String applyProfile(Member member, String displayName, String school) {
         var spec = member.getSpec();
         if (displayName != null) {
             String name = displayName.trim();
@@ -394,23 +400,8 @@ public class MemberClaimEndpoint implements CustomEndpoint {
             }
             spec.setSchool(value.isEmpty() ? null : value);
         }
-        if (avatar == null) {
-            // 老成员可能没有头像，认领时补上默认 QQ 头像，前台卡片才不是空白占位
-            if (StringUtils.isBlank(spec.getAvatar())) {
-                spec.setAvatar(AvatarUtils.defaultQqAvatar(spec.getQq()));
-            }
-            return null;
-        }
-        String value = avatar.trim();
-        if (value.isEmpty()) {
-            spec.setAvatar(AvatarUtils.defaultQqAvatar(spec.getQq()));
-            return null;
-        }
-        String error = AvatarUtils.validateDataUrl(value);
-        if (error != null) {
-            return error;
-        }
-        spec.setAvatar(value);
+        // 头像固定为 QQ 头像：既补齐老成员缺失的头像，也覆盖历史上存过的自定义头像
+        spec.setAvatar(AvatarUtils.defaultQqAvatar(spec.getQq()));
         return null;
     }
 
@@ -450,17 +441,27 @@ public class MemberClaimEndpoint implements CustomEndpoint {
      *
      * @return 可用于收码的规范化邮箱；空串表示成员无可用邮箱；{@code null} 表示不接受该手填邮箱
      */
+    /**
+     * 认领验证码的收件地址。
+     *
+     * <p>自定义邮箱同样关闭：只发 QQ 邮箱（QQ号@qq.com）。
+     * QQ 号异常无法拼出邮箱时，才回退到成员资料里登记的邮箱，
+     * 否则这批老成员会永久无法完成认领。
+     */
     static String claimVerificationEmail(Member member, String manualEmail, String qq) {
-        String registered = EmailUtils.normalize(member.getSpec().getEmail());
         String qqMail = EmailUtils.normalize(EmailUtils.resolveEmail(null, qq));
+        String registered = EmailUtils.normalize(member.getSpec().getEmail());
         String manual = EmailUtils.normalize(manualEmail);
+        if (!qqMail.isEmpty()) {
+            if (manual.isEmpty() || manual.equals(qqMail)) {
+                return qqMail;
+            }
+            return null;
+        }
         if (manual.isEmpty()) {
-            return registered.isEmpty() ? qqMail : registered;
+            return registered;
         }
-        if (manual.equals(registered) || (!qqMail.isEmpty() && manual.equals(qqMail))) {
-            return manual;
-        }
-        return null;
+        return manual.equals(registered) ? registered : null;
     }
 
     private void publishClaimCode(Member member, String email, String code) {

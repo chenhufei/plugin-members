@@ -152,11 +152,24 @@ public interface SettingConfigMember {
     }
 
     /**
-     * 学校关联分析（成员星球连线）的独立设置组。
+     * 学校关联分析（关系网连线）的独立设置组。
      *
      * <p>单独成组，便于管理员明确「这是一项会调用大模型的能力」而独立开关，
      * 不与安全/通知类配置混在一起。</p>
      */
+    /**
+     * 成员认领（自助补全 QQ 加好友链接）的独立设置组。
+     *
+     * <p>此前认领选项写在 security 组，但代码从 basic 组读取，导致后台选择的
+     * 验证方式实际从未生效。独立成组后读写同源。
+     */
+    @Data
+    class ClaimGroupConfig {
+        public static final String GROUP = "claim";
+        private boolean autoApproveClaim = false;
+        private String claimVerifyMode;
+    }
+
     @Data
     class AffinityGroupConfig {
         public static final String GROUP = "affinity";

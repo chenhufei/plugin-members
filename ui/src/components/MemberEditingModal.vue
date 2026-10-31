@@ -7,6 +7,7 @@ import { Dialog, Toast, VButton, VModal, VSpace } from "@halo-dev/components";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import { useTemplateRef } from "vue";
 import MemberForm from "./MemberForm.vue";
+import { qqAvatar } from "@/utils/qq-link";
 
 const props = withDefaults(
   defineProps<{
@@ -37,7 +38,7 @@ const { mutate, isPending } = useMutation({
       { op: "add", path: "/spec/email", value: data.email || "" },
       { op: "add", path: "/spec/school", value: data.school || "" },
       { op: "add", path: "/spec/qq", value: data.qq },
-      { op: "add", path: "/spec/avatar", value: data.avatar || "" },
+      { op: "add", path: "/spec/avatar", value: qqAvatar(data.qq) },
       { op: "add", path: "/spec/background", value: data.background || "" },
       { op: "add", path: "/spec/qqFriendLink", value: data.qqFriendLink || "" },
       { op: "add", path: "/spec/groupName", value: data.groupName || "" },

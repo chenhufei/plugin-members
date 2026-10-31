@@ -7,6 +7,7 @@ import { Toast, VButton, VModal, VSpace } from "@halo-dev/components";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import { computed, useTemplateRef } from "vue";
 import MemberForm from "./MemberForm.vue";
+import { qqAvatar } from "@/utils/qq-link";
 
 const props = defineProps<{
   group?: MemberGroup;
@@ -34,7 +35,7 @@ const { mutate, isPending } = useMutation({
         email: data.email,
         school: data.school,
         qq: data.qq,
-        avatar: data.avatar,
+        avatar: qqAvatar(data.qq),
         background: data.background,
         qqFriendLink: data.qqFriendLink,
         groupName: props.group?.metadata.name || data.groupName,

@@ -2,8 +2,8 @@
 import { useMemberGroupFetch } from "@/composables/use-group-fetch";
 import type { MemberFormState } from "@/types";
 import { Toast, VButton } from "@halo-dev/components";
-import jsQR from "jsqr";
 import { nextTick, onMounted, ref, shallowRef, toRaw, useTemplateRef } from "vue";
+import { decodeQrFromImage, normalizeQqLink } from "@/utils/qq-link";
 
 const props = withDefaults(defineProps<{
   name?: string;
@@ -79,26 +79,15 @@ function handleQRCodeUpload(e: Event) {
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
-    const canvas = document.createElement("canvas");
-    const maxDimension = 1600;
-    const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
-    canvas.width = Math.max(1, Math.round(img.width * scale));
-    canvas.height = Math.max(1, Math.round(img.height * scale));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) { qrCodeProcessing.value = false; return; }
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code?.data) {
-      const match = code.data.trim().match(/^https:\/\/qm\.qq\.com\/q\/[^\s]+$/i);
-      if (match) {
-        data.value.qqFriendLink = match[0];
-        Toast.success("二维码解析成功！");
-      } else {
-        Toast.warning("不是 QQ 加好友链接（需为 https://qm.qq.com/q/ 开头）");
-      }
+    const decoded = decodeQrFromImage(img);
+    const normalized = normalizeQqLink(decoded);
+    if (normalized) {
+      data.value.qqFriendLink = normalized;
+      Toast.success("二维码解析成功！");
+    } else if (decoded) {
+      Toast.warning("不是 QQ 加好友链接（需为 qm.qq.com 官方链接）");
     } else {
-      Toast.error("无法识别二维码");
+      Toast.error("无法识别二维码，可换一张更清晰、只含二维码的截图");
     }
     qrCodeProcessing.value = false;
     URL.revokeObjectURL(url);
@@ -121,10 +110,15 @@ async function onSubmit() {
   if (!data.value.displayName.trim()) { Toast.error("请填写账号名称"); return; }
   if (!data.value.school.trim()) { Toast.error("请填写所属学校"); return; }
   if (!validateQQ(data.value.qq)) { Toast.error("请填写 5-12 位 QQ号"); return; }
-  const friendLink = data.value.qqFriendLink.trim();
-  if (friendLink && !/^https:\/\/qm\.qq\.com\/q\/[^\s]+$/i.test(friendLink)) {
-    Toast.error("QQ 加好友链接需为 https://qm.qq.com/q/ 开头的链接");
-    return;
+  const rawFriendLink = data.value.qqFriendLink.trim();
+  let friendLink = "";
+  if (rawFriendLink) {
+    friendLink = normalizeQqLink(rawFriendLink);
+    if (!friendLink) {
+      Toast.error("QQ 加好友链接需为 qm.qq.com 的官方链接（/q/ 或 /cgi-bin/qm/qr）");
+      return;
+    }
+    data.value.qqFriendLink = friendLink;
   }
 
   emit("submit", {
@@ -150,7 +144,7 @@ async function onSubmit() {
         <FormKit type="text" name="displayName" v-model="data.displayName" validation="required" label="账号名称" help="例如：清华大学表白墙" />
         <FormKit type="text" name="school" v-model="data.school" validation="required" label="所属学校" help="例如：清华大学" />
         <FormKit type="datetime-local" name="joinedAt" v-model="data.joinedAt" label="加入时间" help="用于成员排序与加入时间展示；留空则使用创建时间" />
-        <FormKit type="text" name="qqFriendLink" v-model="data.qqFriendLink" label="QQ加好友链接" help="需为 https://qm.qq.com/q/ 开头的链接，可通过上传二维码自动获取" />
+        <FormKit type="text" name="qqFriendLink" v-model="data.qqFriendLink" label="QQ加好友链接" help="需为 qm.qq.com 的官方链接（/q/ 或 /cgi-bin/qm/qr），可通过上传二维码自动获取" />
         <div class=":uno: py-2">
           <input type="file" accept="image/*" style="display:none" ref="qrInput" @change="handleQRCodeUpload" />
           <VButton size="sm" type="secondary" :loading="qrCodeProcessing" @click="qrInput?.click()">
@@ -159,7 +153,12 @@ async function onSubmit() {
         </div>
 
         <FormKit type="email" name="email" v-model="data.email" label="邮箱" help="用于审核通知" />
-        <FormKit type="attachment" name="avatar" v-model="data.avatar" label="头像" />
+        <div class=":uno: py-2">
+          <div class=":uno: text-sm text-gray-900">头像</div>
+          <div class=":uno: mt-1 text-xs text-gray-500">
+            统一使用 QQ 头像（<span class=":uno: font-mono">{{ data.qq || "QQ号" }}</span> 的 QQ 头像），不支持自定义上传
+          </div>
+        </div>
         <FormKit type="attachment" name="background" v-model="data.background" label="背景图" help="成员卡片背景图片" />
         <FormKit type="select" name="groupName" v-model="data.groupName" label="所属分组"
           :options="[

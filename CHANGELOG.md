@@ -1,5 +1,39 @@
 # 更新日志
 
+## [1.17.0] - 2026-11-01
+
+### Features
+- **MCP 工具从 16 个扩充到 27 个**：补齐此前只在后台可达的能力，全部沿用「查询需查看权限、
+  写入需管理权限」的分级，并且**成员本身仍不提供删除/合并**——破坏性操作保持克制。
+  - 分组治理：`create_member_group`、`update_member_group`（改名级联更新成员分组字段）、
+    `delete_member_group`（只允许删空分组，非空返回 `GROUP_NOT_EMPTY`）。
+  - 查询与治理：`list_member_withdrawals`（先看再批）、`list_claim_tokens`、`revoke_claim_token`。
+  - 数据质量：`audit_member_data` 一次扫描六项问题（重复 QQ/邮箱、缺 QQ 或加好友链接、缺学校、
+    分组引用失效、头像与 QQ 不一致、状态非法），只读且可按 `checks` 裁剪。
+  - 批量与字段：`batch_update_members`（默认 `dryRun=true`，规则是「先算差异再落笔」）、
+    `update_member` 扩展到可改 `qqFriendLink`、`joinedAt`、`background`、`validate_qq_link`。
+  - 关系分析：`analyze_school_affinity`，复用后台同一套服务与判定，未装 AI Foundation
+    或后台关闭时返回稳定错误码而非异常。
+- **`get_member_overview` 概览快照**：MCP Server 1.3.x 的 API 只有 tools、没有 resources，
+  因此用一次性快照替代 `members://overview` 这类资源读取——一次返回总量与通过率、分组与学校分布、
+  待办队列、数据质量摘要、申请趋势，可用 `sections` 只取需要的分区。**只查被请求分区所依赖的数据**，
+  全表扫描最多一次，避免「统计一次、分组一次、待审一次、巡检又一次」的四连调用。
+- **`list_members` 支持 `fields` 投影**：每条成员只返回指定字段，大页码时显著减少返回体积。
+- **认领配置独立分组**：插件设置从「安全防护」里拆出「成员认领」组，
+  申请类开关与验证方式不再混在防护项里；验证方式文案改为「邮箱验证码（QQ 邮箱）」。
+
+### Fixes
+- **二维码里的加好友链接 100% 被判非法**：`https://qm.qq.com/cgi-bin/qm/qr?k=xxx` 的 path
+  恰好等于允许前缀，`path.length > prefix.length` 的判据把 QQ 客户端导出的旧版二维码链接全部拒绝。
+  改为按「`/q/<token>` 或 `/cgi-bin/qm/qr` 且 query 带非空 `k`」判定，前后端（Java / TS）逐字对齐，
+  并把这条规则补进校验脚本防止回退。
+- **认领后仍可写自定义头像**：`applyProfile` 不再接受头像参数，统一由 QQ 号派生；
+  验证码也只发往 QQ 邮箱（QQ 号非法时才回退登记邮箱），与前台「只用默认 QQ 头像和 QQ 邮箱」一致。
+- **巡检误判为无问题**：`auditValue` 只区分 `qq` 与 `email`，传入 `school` 时落到邮箱分支，
+  学校检查永远为 0。改为三分支取值。
+- **预览模式污染实体**：`batch_update_members` 原本先就地改 `spec` 再判断 `dryRun`，
+  即使预览也会改动内存里的成员对象；改为先计算差异、再决定是否写入。
+
 ## [1.16.0] - 2026-11-01
 
 ### Features

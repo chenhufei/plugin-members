@@ -26,17 +26,18 @@ class MemberClaimVerificationEmailTest {
     }
 
     @Test
-    @DisplayName("未填邮箱时使用成员登记邮箱")
-    void fallsBackToRegisteredEmail() {
-        assertEquals("owner@example.com",
+    @DisplayName("自定义邮箱已关闭：即使登记了别的邮箱，也只发 QQ 邮箱")
+    void prefersQqMailbox() {
+        assertEquals("10001@qq.com",
             MemberClaimEndpoint.claimVerificationEmail(member("Owner@Example.com", "10001"), "", "10001"));
     }
 
     @Test
-    @DisplayName("无登记邮箱时回退到该 QQ 号自带的 QQ 邮箱")
-    void fallsBackToQqMailbox() {
-        assertEquals("10001@qq.com",
-            MemberClaimEndpoint.claimVerificationEmail(member(null, "10001"), "", "10001"));
+    @DisplayName("QQ 号无法拼出邮箱时回退到成员登记邮箱，避免老数据永久无法认领")
+    void fallsBackToRegisteredEmailWhenQqInvalid() {
+        assertEquals("owner@example.com",
+            MemberClaimEndpoint.claimVerificationEmail(
+                member("Owner@Example.com", "not-a-qq"), "", "not-a-qq"));
         assertEquals("10001@qq.com",
             MemberClaimEndpoint.claimVerificationEmail(member("  ", "10001"), "10001@qq.com", "10001"));
     }

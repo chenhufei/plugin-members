@@ -4,6 +4,7 @@ metadata:
   name: plugin-members-settings
 spec:
   forms:
+    # ===== 1. 申请审核：谁能进、进哪个分组 =====
     - group: basic
       label: 申请审核
       formSchema:
@@ -64,42 +65,33 @@ spec:
             valueField: metadata.name
           help: 这些分组不会出现在前台成员申请表中
 
-    - group: notification
-      label: 消息通知
+    # ===== 2. 成员认领：自助补全 QQ 加好友链接 =====
+    - group: claim
+      label: 成员认领
       formSchema:
         - $formkit: switch
-          name: enableAdminNotification
-          id: enableAdminNotification
-          key: enableAdminNotification
-          label: 管理员站内通知
-          help: 新申请和撤回申请会显示在指定 Halo 用户的站内通知中
-          value: true
-        - $formkit: text
-          if: $get(enableAdminNotification).value === true
-          id: adminUsername
-          name: adminUsername
-          key: adminUsername
-          value: admin
-          label: 管理员用户名
-          help: 填写 Halo 登录用户名，不是显示昵称
-          validation: required
-        - $formkit: switch
-          name: sendEmail
-          id: sendEmail
-          key: sendEmail
-          label: 发送邮件通知
-          help: 关闭时不发送任何邮件，且成员自助补全 QQ 链接的邮箱验证码、撤回验证码会直接返回不可用。开启后还需在 Halo 控制台「通知-邮件」中配置发信服务，本插件才能实际投递。
+          id: autoApproveClaim
+          name: autoApproveClaim
+          key: autoApproveClaim
+          label: 认领自动通过
+          help: 开启后成员自助补全 QQ 加好友链接立即生效；关闭时需管理员在此插件后台审核通过后才显示
           value: false
-        - $formkit: text
-          if: $get(sendEmail).value === true
-          id: adminEmail
-          name: adminEmail
-          key: adminEmail
-          value: ""
-          label: 管理员邮箱
-          help: 用于接收新申请和撤回申请提醒
-          validation: required|email
+        - $formkit: select
+          id: claimVerifyMode
+          name: claimVerifyMode
+          key: claimVerifyMode
+          label: 认领验证方式
+          help: 成员自助认领时使用的验证方式。邮箱验证码只发往该成员的 QQ 邮箱（QQ号@qq.com），不接受自定义邮箱；建议至少保留一种验证，全部关闭会降低防滥用能力。
+          options:
+            - label: 图形验证码
+              value: captcha
+            - label: 邮箱验证码（QQ 邮箱）
+              value: email
+            - label: 关闭验证
+              value: none
+          value: email
 
+    # ===== 3. 安全防护：限流、验证码、黑名单 =====
     - group: security
       label: 安全防护
       formSchema:
@@ -157,37 +149,54 @@ spec:
           label: 拒绝空 User-Agent
           help: 默认关闭，避免误伤代理或特殊客户端
           value: false
-        - $formkit: switch
-          id: autoApproveClaim
-          name: autoApproveClaim
-          key: autoApproveClaim
-          label: 认领自动通过
-          help: 开启后成员自助补全 QQ 链接立即生效；关闭时需管理员在后台审核通过后才显示
-          value: false
-        - $formkit: select
-          id: claimVerifyMode
-          name: claimVerifyMode
-          key: claimVerifyMode
-          label: 认领验证方式
-          help: 成员自助认领时使用的验证方式；建议至少保留一种验证，全部关闭会降低防滥用能力
-          options:
-            - label: 图形验证码
-              value: captcha
-            - label: 邮箱验证码
-              value: email
-            - label: 关闭验证
-              value: none
-          value: email
 
+    # ===== 4. 消息通知：站内通知与邮件 =====
+    - group: notification
+      label: 消息通知
+      formSchema:
+        - $formkit: switch
+          name: enableAdminNotification
+          id: enableAdminNotification
+          key: enableAdminNotification
+          label: 管理员站内通知
+          help: 新申请和撤回申请会显示在指定 Halo 用户的站内通知中
+          value: true
+        - $formkit: text
+          if: $get(enableAdminNotification).value === true
+          id: adminUsername
+          name: adminUsername
+          key: adminUsername
+          value: admin
+          label: 管理员用户名
+          help: 填写 Halo 登录用户名，不是显示昵称
+          validation: required
+        - $formkit: switch
+          name: sendEmail
+          id: sendEmail
+          key: sendEmail
+          label: 发送邮件通知
+          help: 关闭时不发送任何邮件，且成员认领的邮箱验证码会直接返回不可用。开启后还需在 Halo 控制台「通知-邮件」中配置发信服务，本插件才能实际投递。
+          value: false
+        - $formkit: text
+          if: $get(sendEmail).value === true
+          id: adminEmail
+          name: adminEmail
+          key: adminEmail
+          value: ""
+          label: 管理员邮箱
+          help: 用于接收新申请和撤回申请提醒
+          validation: required|email
+
+    # ===== 5. 学校关联分析：关系网连线（调用 AI Foundation）=====
     - group: affinity
-      label: 学校关联分析
+      label: 学校关联分析（关系网连线）
       formSchema:
         - $formkit: switch
           id: affinityEnabled
           name: affinityEnabled
           key: affinityEnabled
           label: 启用学校关联分析
-          help: 开启后，成员星球视图会调用 AI Foundation 的默认语言模型，判断成员所属学校之间是否存在关联，并以粗细不同的连线呈现。需先安装并启用 AI Foundation 并配置默认模型；分析结果缓存 30 分钟，关闭后立即停止调用。
+          help: 开启后，成员关系网视图会调用 AI Foundation 的默认语言模型，判断成员所属学校之间是否存在关联，并以粗细不同的连线呈现。需先安装并启用 AI Foundation 并配置默认模型；分析结果缓存 30 分钟，关闭后立即停止调用。
           value: false
         - $formkit: select
           id: affinityAspects
@@ -213,7 +222,7 @@ spec:
           name: affinityMaxLinks
           key: affinityMaxLinks
           label: 最多连线数
-          help: 限制返回给星球的关联边数量，避免学校较多时连线过密影响观感
+          help: 限制返回给关系网的关联边数量，避免学校较多时连线过密影响观感
           value: 12
           step: 1
           validation: required|number|min:1|max:40

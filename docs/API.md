@@ -317,27 +317,43 @@ GET /apis/api.member.plugin.halo.run/v1alpha1/members/-/statistics/overall
 
 ## MCP 工具
 
-安装并启用 Halo MCP Server 插件后，本插件注册 15 个工具（协议名带 `PluginMembers__` 前缀）。未安装 MCP Server 时相关类不会被加载，插件功能不受影响。
+安装并启用 Halo MCP Server 插件后，本插件注册 27 个工具（协议名带 `PluginMembers__` 前缀）。未安装 MCP Server 时相关类不会被加载，插件功能不受影响。
+
+> MCP Server 1.3.x 的 API 只提供 tools，没有 resources / prompts 能力，因此「一次性读取的只读快照」由 `get_member_overview` 承担：它用 `sections` 裁剪、一次返回花名册全貌，等价于 `members://overview` 这类资源的替代物。
 
 | 工具 | 分类 | 参数 | 说明 |
 |------|------|------|------|
-| `list_members` | 成员查询 | `page`、`size`(1-100)、`status`、`groupName`、`keyword`、`sort` | 分页筛选成员 |
+| `list_members` | 成员查询 | `page`、`size`(1-100)、`status`、`groupName`、`keyword`、`sort`、`fields` | 分页筛选成员；`fields` 可裁剪每条返回的字段以省 token |
 | `get_member` | 成员查询 | `name`（必填） | 读取单个成员，含审核备注 |
-| `list_member_groups` | 成员分组 | 无 | 列出全部分组 |
-| `get_member_statistics` | 成员查询 | 无 | 总量、通过率与分布 |
 | `search_members_advanced` | 成员查询 | `page`、`size`、`keyword`、`status`、`groupName`、`createdAfter`、`createdBefore`、`fuzzyMatch`、`sort` | 组合条件搜索，支持模糊与时间区间 |
+| `get_member_statistics` | 成员查询 | 无 | 总量、通过率与分布 |
+| `get_member_overview` | 成员查询 | `sections`（`core`/`groups`/`schools`/`queues`/`health`/`trend`）、`schoolLimit`(1-40)、`trendDays`(1-90) | 一次返回花名册快照：总量、分组与学校分布、待办队列、数据质量摘要、申请趋势；只查被请求分区所依赖的数据 |
 | `generate_member_report` | 成员查询 | `type`、`groupName`、`trendDays`、`format` | 生成统计报告（摘要/CSV/JSON） |
 | `member_duplicate_check` | 成员查询 | `field`、`minCount` | 按邮箱、QQ 或学校列出重复成员簇 |
+| `audit_member_data` | 成员查询 | `checks`、`limit`(1-100) | 六项数据质量巡检：重复、联系方式、学校、分组引用、头像、状态 |
 | `export_member_data` | 成员查询 | `format`、`names`、`status`、`groupName` | 导出成员 CSV/JSON |
+| `validate_qq_link` | 成员查询 | `link`（必填） | 校验并归一化 QQ 加好友链接，落库前先判 |
 | `review_member_submissions` | 成员审核 | `names`（必填）、`approved`（必填） | 批量通过/驳回 |
 | `review_member_withdrawals` | 成员审核 | `names`（必填）、`approved`（必填） | 批量处理撤回申请 |
-| `update_member` | 成员审核 | `name`（必填）与至少一个资料字段 | 修改昵称、邮箱、学校、QQ 或分组 |
+| `list_member_withdrawals` | 成员审核 | 无 | 列出待处理撤回申请及撤回理由、撤回前状态 |
+| `update_member` | 成员审核 | `name`（必填）与至少一个资料字段（含 `qqFriendLink`、`joinedAt`、`background`） | 修改成员资料 |
 | `batch_import_members` | 成员审核 | `format`（必填）、`data`（必填）、`defaultGroup` | 导入成员，新成员待审核 |
+| `batch_update_members` | 成员审核 | `names`（必填）、`school`/`groupName`/`clearGroup`/`qqFriendLink`、`dryRun`(默认 true) | 批量补丁式修改，默认只预览 |
 | `assign_member_group` | 成员审核 | `names`（必填）、`groupName`（必填） | 批量调整分组 |
 | `auto_approve_pending` | 成员审核 | `dryRun`(默认 true)、`limit`(1-100)、`school`、`groupName`、`createdBefore` | 按条件筛选待审核成员并通过，最早优先 |
+| `list_member_groups` | 成员分组 | 无 | 列出全部分组 |
+| `create_member_group` | 成员分组 | `displayName`（必填）、`description`、`name` | 新建分组，显示名不可重复 |
+| `update_member_group` | 成员分组 | `name`（必填）、`displayName`、`description` | 分组改名会级联更新成员的分组字段 |
+| `delete_member_group` | 成员分组 | `name`（必填） | 仅允许删除空分组，非空返回 `GROUP_NOT_EMPTY` |
 | `auto_assign_group` | 成员分组 | `rules`（必填）、`onlyUngrouped`(默认 true)、`status`(默认 APPROVED)、`dryRun`(默认 true)、`limit`(1-200) | 按学校关键词规则批量改组，目标分组须已存在 |
+| `generate_claim_tokens` | 成员认领 | `names`、`groupName`、`expiresInDays`、`regenerate` | 生成认领令牌与认领链接 |
+| `list_claim_tokens` | 成员认领 | 无 | 列出有效令牌与过期时间 |
+| `revoke_claim_token` | 成员认领 | `name`（必填） | 吊销单个成员的认领令牌 |
+| `analyze_school_affinity` | 成员关系 | `dimension`、`limit`、`school` | 学校关联分析，未装 AI Foundation 或后台关闭时返回稳定错误码 |
 
-两个 `auto_*` 工具默认只预览（`dryRun=true`），返回计划处理的成员清单；显式传入 `dryRun=false` 才会写入。`auto_assign_group` 的 `rules` 为“学校关键词 → 已有分组名”的对象，首个命中的规则生效，已在目标分组的成员会被跳过。
+`batch_update_members`、`auto_*` 默认只预览（`dryRun=true`），返回计划处理的成员清单；显式传入 `dryRun=false` 才会写入。`auto_assign_group` 的 `rules` 为“学校关键词 → 已有分组名”的对象，首个命中的规则生效，已在目标分组的成员会被跳过。
+
+成员本身不提供删除或合并工具；分组删除也限定为空分组，避免成员失去归属。
 
 工具执行前会校验当前 MCP 密钥所属用户的角色权限：查询类需要成员查看权限，审核类需要成员管理权限；权限不足返回稳定错误码而不是抛出堆栈。
 

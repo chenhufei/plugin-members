@@ -24,8 +24,12 @@ import run.halo.members.Member;
 @RequiredArgsConstructor
 public class ClaimTokenService {
 
-    private static final String CLAIM_TOKEN_ANNOTATION = "member.plugin.halo.run/claim-token";
-    private static final String CLAIM_TOKEN_EXPIRES_ANNOTATION = "member.plugin.halo.run/claim-token-expires";
+    /** 认领令牌存储位置；MCP 工具读取清单时复用同一常量，避免键名漂移。 */
+    public static final String CLAIM_TOKEN_ANNOTATION = "member.plugin.halo.run/claim-token";
+
+    /** 认领令牌过期时间（ISO-8601）。 */
+    public static final String CLAIM_TOKEN_EXPIRES_ANNOTATION =
+        "member.plugin.halo.run/claim-token-expires";
     private static final int TOKEN_BYTES = 32;
     private static final long DEFAULT_EXPIRY_HOURS = 168; // 7 days
 

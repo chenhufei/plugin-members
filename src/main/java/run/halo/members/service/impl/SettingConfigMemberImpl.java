@@ -10,6 +10,7 @@ import run.halo.app.plugin.ReactiveSettingFetcher;
 import run.halo.members.service.SettingConfigMember;
 import run.halo.members.service.SettingConfigMember.AffinityGroupConfig;
 import run.halo.members.service.SettingConfigMember.BasicGroupConfig;
+import run.halo.members.service.SettingConfigMember.ClaimGroupConfig;
 import run.halo.members.service.SettingConfigMember.NotificationGroupConfig;
 import run.halo.members.service.SettingConfigMember.SecurityGroupConfig;
 
@@ -30,9 +31,11 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
                     .defaultIfEmpty(new BasicGroupConfig()),
                 optionalGroup(NotificationGroupConfig.GROUP, NotificationGroupConfig.class),
                 optionalGroup(SecurityGroupConfig.GROUP, SecurityGroupConfig.class),
-                optionalGroup(AffinityGroupConfig.GROUP, AffinityGroupConfig.class)
+                optionalGroup(AffinityGroupConfig.GROUP, AffinityGroupConfig.class),
+                optionalGroup(ClaimGroupConfig.GROUP, ClaimGroupConfig.class)
             )
-            .map(tuple -> merge(tuple.getT1(), tuple.getT2(), tuple.getT3(), tuple.getT4()));
+            .map(tuple -> merge(tuple.getT1(), tuple.getT2(), tuple.getT3(), tuple.getT4(),
+                tuple.getT5()));
     }
 
     private <T> Mono<Optional<T>> optionalGroup(String group, Class<T> type) {
@@ -44,7 +47,8 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
     private BasicConfig merge(BasicGroupConfig basic,
                               Optional<NotificationGroupConfig> notification,
                               Optional<SecurityGroupConfig> security,
-                              Optional<AffinityGroupConfig> affinity) {
+                              Optional<AffinityGroupConfig> affinity,
+                              Optional<ClaimGroupConfig> claim) {
         var config = new BasicConfig();
         config.setAutoApprove(basic.isAutoApprove());
         config.setAutoApproveWithdraw(basic.isAutoApproveWithdraw());
@@ -77,11 +81,16 @@ public class SettingConfigMemberImpl implements SettingConfigMember {
             ? securityConfig.getBlockedUserAgentKeywords() : basic.getBlockedUserAgentKeywords());
         config.setRejectMissingUserAgent(securityConfig != null
             ? securityConfig.isRejectMissingUserAgent() : basic.isRejectMissingUserAgent());
-        // 认领专用配置：默认从 basic 组读取
-        config.setAutoApproveClaim(basic.isAutoApproveClaim());
-        // 认领验证方式必须显式透传，否则 effectiveClaimVerifyMode() 只能走旧字段迁移分支，
-        // 导致后台选择的 captcha / none 不生效。
-        config.setClaimVerifyMode(basic.getClaimVerifyMode());
+        // 认领专用配置：优先读 claim 组，缺失时回退旧位置（basic），保证升级无损
+        var claimConfig = claim.orElse(null);
+        config.setAutoApproveClaim(claimConfig != null
+            ? claimConfig.isAutoApproveClaim() : basic.isAutoApproveClaim());
+        var claimMode = claimConfig == null ? null : claimConfig.getClaimVerifyMode();
+        if (claimMode == null || claimMode.isBlank()) {
+            claimMode = basic.getClaimVerifyMode();
+        }
+        // 验证方式必须显式透传，否则 effectiveClaimVerifyMode() 只能走旧字段迁移分支
+        config.setClaimVerifyMode(claimMode);
         config.setEnableClaimCaptcha(basic.isEnableClaimCaptcha());
         config.setEnableClaimEmail(basic.isEnableClaimEmail());
 

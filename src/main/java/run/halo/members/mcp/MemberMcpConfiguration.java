@@ -13,6 +13,10 @@ import run.halo.members.service.MemberBatchService;
 import run.halo.members.service.MemberQueryService;
 import run.halo.members.service.MemberStatisticsService;
 import run.halo.members.service.MemberWithdrawReviewService;
+import run.halo.members.service.SchoolAffinityService;
+import run.halo.members.service.SettingConfigMember;
+
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * 仅在 MCP Server 插件在场时注册成员 MCP 工具 Provider。
@@ -34,9 +38,12 @@ public class MemberMcpConfiguration {
         MemberStatisticsService statisticsService,
         MemberWithdrawReviewService withdrawReviewService,
         ClaimTokenService claimTokenService,
-        ExternalLinkProcessor externalLinkProcessor) {
+        ExternalLinkProcessor externalLinkProcessor,
+        SettingConfigMember settingConfigMember,
+        ObjectProvider<SchoolAffinityService> affinityServiceProvider) {
         return new MemberMcpToolProvider(roleService, client, memberFinder,
             memberQueryService, memberBatchService, statisticsService, withdrawReviewService,
-            claimTokenService, externalLinkProcessor);
+            claimTokenService, externalLinkProcessor, settingConfigMember,
+            affinityServiceProvider);
     }
 }
