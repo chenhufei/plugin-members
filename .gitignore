@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+ui/node_modules/
+
+# Build outputs
+bin/
+build/
+target/
+*.jar
+!gradle-wrapper.jar
+*.tsbuildinfo
+
+# 前端构建生成物：由 Gradle 关联的 UI 构建任务重新生成，不入库
+/src/main/resources/console/
+/src/main/resources/fonts/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+.gradle/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+.npm/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# 本地快捷方式与编译诊断输出
+*.lnk
+compile*.txt
+diag.txt
+test1.txt
+
+# Kiro
+.kiro/
+.agent/
+.cursor/
+.windsurf/

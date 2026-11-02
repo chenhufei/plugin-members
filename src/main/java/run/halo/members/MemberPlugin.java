@@ -1,0 +1,43 @@
+package run.halo.members;
+
+import org.springframework.stereotype.Component;
+
+import run.halo.app.extension.Scheme;
+import run.halo.app.extension.SchemeManager;
+import run.halo.app.extension.index.IndexSpecs;
+import run.halo.app.plugin.BasePlugin;
+import run.halo.app.plugin.PluginContext;
+
+/**
+ * 成员管理插件主类
+ * @since 1.0.0
+ */
+@Component
+public class MemberPlugin extends BasePlugin {
+
+    private final SchemeManager schemeManager;
+
+    public MemberPlugin(PluginContext pluginContext, SchemeManager schemeManager) {
+        super(pluginContext);
+        this.schemeManager = schemeManager;
+    }
+
+    @Override
+    public void start() {
+        // 注册 Member、MemberGroup 和自助提交定时任务扩展
+        schemeManager.register(Member.class, indexSpecs -> indexSpecs.add(
+            IndexSpecs.<Member, String>single("spec.status", String.class)
+                .indexFunc(member -> member.getSpec() == null
+                    ? null : member.getSpec().getStatus())
+        ));
+        schemeManager.register(MemberGroup.class);
+        schemeManager.register(CronMemberSubmit.class);
+    }
+
+    @Override
+    public void stop() {
+        schemeManager.unregister(Scheme.buildFromType(Member.class));
+        schemeManager.unregister(Scheme.buildFromType(MemberGroup.class));
+        schemeManager.unregister(Scheme.buildFromType(CronMemberSubmit.class));
+    }
+}

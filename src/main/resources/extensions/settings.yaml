@@ -1,0 +1,228 @@
+apiVersion: v1alpha1
+kind: Setting
+metadata:
+  name: plugin-members-settings
+spec:
+  forms:
+    # ===== 1. 申请审核：谁能进、进哪个分组 =====
+    - group: basic
+      label: 申请审核
+      formSchema:
+        - $formkit: switch
+          name: autoApprove
+          id: autoApprove
+          key: autoApprove
+          label: 自动通过申请
+          help: 新成员申请提交后直接通过，适合无需人工审核的站点
+          value: false
+        - $formkit: number
+          name: pendingCapacity
+          id: pendingCapacity
+          key: pendingCapacity
+          label: 待审核申请容量
+          help: 未开启自动通过时，限制同时处于待审核状态的成员申请数量
+          value: 100
+          step: 1
+          validation: required|number|min:1|matches:/^[1-9][0-9]*$/
+        - $formkit: switch
+          name: autoApproveWithdraw
+          id: autoApproveWithdraw
+          key: autoApproveWithdraw
+          label: 自动通过撤回
+          help: 用户提交撤回申请后直接处理，无需管理员手动审核
+          value: false
+        - $formkit: select
+          id: defaultGroupName
+          name: defaultGroupName
+          key: defaultGroupName
+          label: 默认成员分组
+          help: 申请未选择分组时自动归入该分组
+          clearable: true
+          action: /apis/member.plugin.halo.run/v1alpha1/membergroups
+          requestOption:
+            method: GET
+            pageField: page
+            sizeField: size
+            totalField: total
+            itemsField: items
+            labelField: spec.displayName
+            valueField: metadata.name
+        - $formkit: select
+          id: forbidSelectedGroupName
+          name: forbidSelectedGroupName
+          key: forbidSelectedGroupName
+          label: 禁止申请的分组
+          multiple: true
+          clearable: true
+          action: /apis/member.plugin.halo.run/v1alpha1/membergroups
+          requestOption:
+            method: GET
+            pageField: page
+            sizeField: size
+            totalField: total
+            itemsField: items
+            labelField: spec.displayName
+            valueField: metadata.name
+          help: 这些分组不会出现在前台成员申请表中
+
+    # ===== 2. 成员认领：自助补全 QQ 加好友链接 =====
+    - group: claim
+      label: 成员认领
+      formSchema:
+        - $formkit: switch
+          id: autoApproveClaim
+          name: autoApproveClaim
+          key: autoApproveClaim
+          label: 认领自动通过
+          help: 开启后成员自助补全 QQ 加好友链接立即生效；关闭时需管理员在此插件后台审核通过后才显示
+          value: false
+        - $formkit: select
+          id: claimVerifyMode
+          name: claimVerifyMode
+          key: claimVerifyMode
+          label: 认领验证方式
+          help: 成员自助认领时使用的验证方式。邮箱验证码只发往该成员的 QQ 邮箱（QQ号@qq.com），不接受自定义邮箱；建议至少保留一种验证，全部关闭会降低防滥用能力。
+          options:
+            - label: 图形验证码
+              value: captcha
+            - label: 邮箱验证码（QQ 邮箱）
+              value: email
+            - label: 关闭验证
+              value: none
+          value: email
+
+    # ===== 3. 安全防护：限流、验证码、黑名单 =====
+    - group: security
+      label: 安全防护
+      formSchema:
+        - $formkit: switch
+          id: enableRateLimit
+          name: enableRateLimit
+          key: enableRateLimit
+          label: 启用提交限流
+          help: 按客户端 IP 限制匿名提交频率，降低刷表和误操作风险
+          value: true
+        - $formkit: number
+          if: $get(enableRateLimit).value === true
+          id: maxRequestsPerMinute
+          name: maxRequestsPerMinute
+          key: maxRequestsPerMinute
+          label: 每分钟最大提交次数
+          help: 单个客户端 IP 每分钟最多允许提交的次数，建议 5-30
+          value: 10
+          validation: required|min:1|max:1000
+        - $formkit: switch
+          id: enableSubmitCaptcha
+          name: enableSubmitCaptcha
+          key: enableSubmitCaptcha
+          label: 提交需要图形验证码
+          help: 匿名提交成员申请前必须先通过图形验证码，关闭后旧版表单可直接提交
+          value: true
+        - $formkit: switch
+          id: enableSecurityBlocklist
+          name: enableSecurityBlocklist
+          key: enableSecurityBlocklist
+          label: 启用安全黑名单
+          help: 按 IP 和 User-Agent 关键字拒绝匿名提交请求
+          value: false
+        - $formkit: textarea
+          if: $get(enableSecurityBlocklist).value === true
+          id: blockedIpList
+          name: blockedIpList
+          key: blockedIpList
+          label: IP 黑名单
+          help: 多个 IP 可使用换行或英文逗号分隔；默认不拦截 127.0.0.1
+          value: ""
+        - $formkit: textarea
+          if: $get(enableSecurityBlocklist).value === true
+          id: blockedUserAgentKeywords
+          name: blockedUserAgentKeywords
+          key: blockedUserAgentKeywords
+          label: User-Agent 黑名单关键字
+          help: 多个关键字可使用换行或英文逗号分隔，例如 scraper、python-requests
+          value: ""
+        - $formkit: switch
+          if: $get(enableSecurityBlocklist).value === true
+          id: rejectMissingUserAgent
+          name: rejectMissingUserAgent
+          key: rejectMissingUserAgent
+          label: 拒绝空 User-Agent
+          help: 默认关闭，避免误伤代理或特殊客户端
+          value: false
+
+    # ===== 4. 消息通知：站内通知与邮件 =====
+    - group: notification
+      label: 消息通知
+      formSchema:
+        - $formkit: switch
+          name: enableAdminNotification
+          id: enableAdminNotification
+          key: enableAdminNotification
+          label: 管理员站内通知
+          help: 新申请和撤回申请会显示在指定 Halo 用户的站内通知中
+          value: true
+        - $formkit: text
+          if: $get(enableAdminNotification).value === true
+          id: adminUsername
+          name: adminUsername
+          key: adminUsername
+          value: admin
+          label: 管理员用户名
+          help: 填写 Halo 登录用户名，不是显示昵称
+          validation: required
+        - $formkit: switch
+          name: sendEmail
+          id: sendEmail
+          key: sendEmail
+          label: 发送邮件通知
+          help: 关闭时不发送任何邮件，且成员认领的邮箱验证码会直接返回不可用。开启后还需在 Halo 控制台「通知-邮件」中配置发信服务，本插件才能实际投递。
+          value: false
+        - $formkit: text
+          if: $get(sendEmail).value === true
+          id: adminEmail
+          name: adminEmail
+          key: adminEmail
+          value: ""
+          label: 管理员邮箱
+          help: 用于接收新申请和撤回申请提醒
+          validation: required|email
+
+    # ===== 5. 学校关联分析：关系网连线（调用 AI Foundation）=====
+    - group: affinity
+      label: 学校关联分析（关系网连线）
+      formSchema:
+        - $formkit: switch
+          id: affinityEnabled
+          name: affinityEnabled
+          key: affinityEnabled
+          label: 启用学校关联分析
+          help: 开启后，成员关系网视图会调用 AI Foundation 的默认语言模型，判断成员所属学校之间是否存在关联，并以粗细不同的连线呈现。需先安装并启用 AI Foundation 并配置默认模型；分析结果缓存 30 分钟，关闭后立即停止调用。
+          value: false
+        - $formkit: select
+          id: affinityAspects
+          name: affinityAspects
+          key: affinityAspects
+          label: 分析维度
+          multiple: true
+          clearable: true
+          help: 选择需要模型判断的关联类型，未选中的维度不会出现在分析提示词中；全部清空时默认三类全开。
+          options:
+            - label: 合作关系（联合办学、共建项目、学术或赛事合作）
+              value: cooperation
+            - label: 地域/机构关联（同城、同一教育集团、同一主管部门）
+              value: region
+            - label: 共同的小组织（联盟、协会、社团、校友会）
+              value: organization
+          value:
+            - cooperation
+            - region
+            - organization
+        - $formkit: number
+          id: affinityMaxLinks
+          name: affinityMaxLinks
+          key: affinityMaxLinks
+          label: 最多连线数
+          help: 限制返回给关系网的关联边数量，避免学校较多时连线过密影响观感
+          value: 12
+          step: 1
+          validation: required|number|min:1|max:40

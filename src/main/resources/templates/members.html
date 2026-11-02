@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="https://www.thymeleaf.org"
+      th:replace="~{layout :: html(head = ~{::head}, content = ~{::content})}">
+<th:block th:fragment="head">
+  <title th:text="|成员 - ${site.title}|">成员</title>
+  <style>
+    .hp-member-page { max-width: 60rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
+    .hp-member-page h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+    .hp-member-desc { margin: 0 0 1.5rem; font-size: .875rem; opacity: .7; }
+    .hp-member-nav { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1.75rem; }
+    .hp-member-nav a {
+      font-size: .8125rem; padding: .3rem .75rem; border-radius: .5rem; text-decoration: none;
+      border: 1px solid rgba(120, 130, 150, .28); color: inherit;
+    }
+    .hp-member-nav a.is-active { border-color: #2563eb; color: #2563eb; font-weight: 600; }
+    .hp-member-section { margin: 0 0 2rem; }
+    .hp-member-section h2 {
+      font-size: .9375rem; margin: 0 0 .75rem; display: flex; align-items: center; gap: .5rem;
+    }
+    .hp-member-count {
+      font-size: .75rem; padding: .05rem .45rem; border-radius: 9999px;
+      background: rgba(120, 130, 150, .16); font-weight: 500;
+    }
+    .hp-member-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .75rem;
+    }
+    .hp-member-card {
+      display: flex; align-items: center; gap: .75rem; padding: .75rem; color: inherit;
+      border: 1px solid rgba(120, 130, 150, .22); border-radius: .75rem; text-decoration: none;
+    }
+    a.hp-member-card:hover { border-color: #2563eb; }
+    .hp-member-avatar {
+      flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: .5rem; overflow: hidden;
+      background: rgba(120, 130, 150, .14); display: flex; align-items: center;
+      justify-content: center; font-size: .875rem; font-weight: 600;
+    }
+    .hp-member-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .hp-member-body { min-width: 0; display: block; }
+    .hp-member-name {
+      display: block; font-size: .875rem; font-weight: 500; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .hp-member-sub {
+      display: block; font-size: .75rem; opacity: .65; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .hp-member-empty { padding: 2rem 0; text-align: center; font-size: .875rem; opacity: .65; }
+  </style>
+</th:block>
+
+<th:block th:fragment="content">
+  <div class="hp-member-page">
+    <h1>成员</h1>
+    <p class="hp-member-desc">共同维护校园沟通秩序的伙伴。</p>
+
+    <nav class="hp-member-nav" aria-label="成员分组"
+         th:if="${allGroups != null and not #lists.isEmpty(allGroups)}">
+      <a th:href="@{/members}"
+         th:classappend="${currentGroup == null or #strings.isEmpty(currentGroup)} ? 'is-active'"
+         th:text="|全部|">全部</a>
+      <a th:each="group : ${allGroups}"
+         th:href="@{/members(group=${group.metadata.name})}"
+         th:classappend="${group.metadata.name == currentGroup} ? 'is-active'"
+         th:text="${group.spec.displayName != null ? group.spec.displayName : group.metadata.name}">分组</a>
+    </nav>
+
+    <th:block th:if="${groups != null and not #lists.isEmpty(groups)}">
+      <section class="hp-member-section" th:each="group : ${groups}">
+        <h2>
+          <span th:text="${group.spec.displayName != null ? group.spec.displayName : group.metadata.name}">分组</span>
+          <span class="hp-member-count"
+                th:text="${group.members == null ? 0 : #lists.size(group.members)}">0</span>
+        </h2>
+        <p class="hp-member-empty" th:if="${group.members == null or #lists.isEmpty(group.members)}">
+          该分组暂无成员
+        </p>
+        <div class="hp-member-grid" th:unless="${group.members == null or #lists.isEmpty(group.members)}">
+          <th:block th:each="member : ${group.members}">
+            <a th:if="${not #strings.isEmpty(member.spec.qqFriendLink)}"
+               th:href="${member.spec.qqFriendLink}" target="_blank" rel="noopener noreferrer"
+               class="hp-member-card">
+              <span class="hp-member-avatar">
+                <img th:if="${not #strings.isEmpty(member.spec.avatar)}"
+                     th:src="${member.spec.avatar}" th:alt="${member.spec.displayName}"
+                     loading="lazy" />
+                <th:block th:unless="${not #strings.isEmpty(member.spec.avatar)}"
+                          th:text="${#strings.isEmpty(member.spec.displayName) ? '成员'
+                              : #strings.substring(member.spec.displayName, 0, 1)}">成</th:block>
+              </span>
+              <span class="hp-member-body">
+                <span class="hp-member-name" th:text="${member.spec.displayName}">成员</span>
+                <span class="hp-member-sub" th:if="${not #strings.isEmpty(member.spec.school)}"
+                      th:text="${member.spec.school}">学校</span>
+              </span>
+            </a>
+            <div th:unless="${not #strings.isEmpty(member.spec.qqFriendLink)}" class="hp-member-card">
+              <span class="hp-member-avatar">
+                <img th:if="${not #strings.isEmpty(member.spec.avatar)}"
+                     th:src="${member.spec.avatar}" th:alt="${member.spec.displayName}"
+                     loading="lazy" />
+                <th:block th:unless="${not #strings.isEmpty(member.spec.avatar)}"
+                          th:text="${#strings.isEmpty(member.spec.displayName) ? '成员'
+                              : #strings.substring(member.spec.displayName, 0, 1)}">成</th:block>
+              </span>
+              <span class="hp-member-body">
+                <span class="hp-member-name" th:text="${member.spec.displayName}">成员</span>
+                <span class="hp-member-sub" th:if="${not #strings.isEmpty(member.spec.school)}"
+                      th:text="${member.spec.school}">学校</span>
+              </span>
+            </div>
+          </th:block>
+        </div>
+      </section>
+    </th:block>
+
+    <p class="hp-member-empty" th:if="${groups == null or #lists.isEmpty(groups)}">
+      暂无成员信息，请在后台添加成员并审核通过。
+    </p>
+  </div>
+</th:block>
+</html>

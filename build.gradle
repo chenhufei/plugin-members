@@ -1,0 +1,263 @@
+plugins {
+    id "com.github.node-gradle.node" version "7.1.0"
+    id "run.halo.plugin.devtools" version "0.6.2"
+    id "io.freefair.lombok" version "9.1.0"
+    id 'java'
+}
+
+group 'run.halo.members'
+version '0.0.1'
+
+repositories {
+    maven { url 'https://maven.aliyun.com/repository/public' }
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform('run.halo.tools.platform:plugin:2.27.1')
+    compileOnly 'run.halo.app:api'
+
+    // MCP Server API 只能编译期依赖：运行时由 mcp-server 插件提供，打进包会造成类冲突。
+    compileOnly 'run.halo.mcpserver:api:1.3.0'
+
+    // AI Foundation SDK 同样只做编译期依赖：运行时由 ai-foundation 插件提供。
+    // 站点未安装 AI Foundation 时，引用它的 Bean 由 @ConditionalOnClass 跳过注册。
+    compileOnly 'run.halo.aifoundation:api:1.0.0'
+
+    testImplementation 'run.halo.app:api'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testCompileOnly 'run.halo.mcpserver:api:1.3.0'
+    testRuntimeOnly 'run.halo.mcpserver:api:1.3.0'
+    testCompileOnly 'run.halo.aifoundation:api:1.0.0'
+    testRuntimeOnly 'run.halo.aifoundation:api:1.0.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = 21
+    options.compilerArgs << '-parameters'
+}
+
+node {
+    // Use the Node.js installation supplied by the developer/CI setup.
+    // Avoid downloading a second archive during local builds.
+    download = false
+    version = '24.15.0'
+    pnpmVersion = '10.22.0'
+    nodeProjectDir = file("${project.projectDir}/ui")
+}
+
+tasks.register('buildFrontend', PnpmTask) {
+    args = ['build']
+    dependsOn('installDepsForUI')
+}
+
+tasks.register('syncWidgetResources', Copy) {
+    dependsOn('installDepsForUI')
+    from(layout.projectDirectory.dir('widget/src'))
+    from(layout.projectDirectory.file('ui/node_modules/jsqr/dist/jsQR.js')) {
+        into('vendor')
+    }
+    from(layout.projectDirectory.file('ui/node_modules/jsqr/LICENSE')) {
+        into('vendor')
+        rename { 'jsQR.LICENSE.txt' }
+    }
+    into(layout.projectDirectory.dir('src/main/resources/static'))
+    doLast {
+        def licenseFile = layout.projectDirectory
+            .file('src/main/resources/static/vendor/jsQR.LICENSE.txt').asFile
+        licenseFile.setText(
+            licenseFile.getText('UTF-8').stripTrailing() + System.lineSeparator(),
+            'UTF-8'
+        )
+    }
+}
+
+tasks.register('typecheckFrontend', PnpmTask) {
+    args = ['typecheck']
+    dependsOn('installDepsForUI')
+}
+
+tasks.register('verifyVersionConsistency') {
+    group = 'verification'
+    description = 'Verify plugin and UI versions match the Gradle project version.'
+    inputs.files(
+        layout.projectDirectory.file('src/main/resources/plugin.yaml'),
+        layout.projectDirectory.file('ui/package.json')
+    )
+    doLast {
+        def expectedVersion = project.version.toString()
+        def pluginYaml = layout.projectDirectory
+            .file('src/main/resources/plugin.yaml').asFile.getText('UTF-8')
+        def versionMatcher = pluginYaml =~ /(?m)^\s{2}version:\s*["']?([^"'\s]+)["']?\s*$/
+        if (!versionMatcher.find()) {
+            throw new GradleException('Unable to read spec.version from plugin.yaml')
+        }
+        def pluginVersion = versionMatcher.group(1)
+        def uiPackage = new groovy.json.JsonSlurper().parse(
+            layout.projectDirectory.file('ui/package.json').asFile
+        )
+        def uiVersion = uiPackage.version.toString()
+        if (pluginVersion != expectedVersion || uiVersion != expectedVersion) {
+            throw new GradleException(
+                "Version mismatch: Gradle=${expectedVersion}, plugin.yaml=${pluginVersion}, ui/package.json=${uiVersion}"
+            )
+        }
+    }
+}
+
+tasks.register('verifyUiSourceContracts') {
+    group = 'verification'
+    description = 'Reject duplicate public withdrawal UI and native browser alerts.'
+    inputs.dir(layout.projectDirectory.dir('ui/src'))
+    doLast {
+        def uiSource = layout.projectDirectory.dir('ui/src').asFile
+        def withdrawnModal = new File(uiSource, 'components/MemberWithdrawModal.vue')
+        if (withdrawnModal.exists()) {
+            throw new GradleException('Public withdrawal UI must remain in the plugin widget only.')
+        }
+        fileTree(uiSource).matching {
+            include '**/*.ts', '**/*.vue'
+        }.files.each { sourceFile ->
+            if (sourceFile.getText('UTF-8') =~ /\balert\s*\(/) {
+                throw new GradleException("Native alert is not allowed in ${sourceFile}")
+            }
+        }
+    }
+}
+
+tasks.register('verifySecurityContracts') {
+    group = 'verification'
+    description = 'Verify anonymous API paths, read-only console access, and CSP-friendly widget entry points.'
+    inputs.files(
+        layout.projectDirectory.file('src/main/resources/extensions/roleTemplate.yaml'),
+        layout.projectDirectory.file('src/main/java/run/halo/members/MemberApplyWidgetFooterProcessor.java'),
+        layout.projectDirectory.file('widget/src/member-apply-widget.iife.js')
+    )
+    doLast {
+        def roleTemplate = layout.projectDirectory
+            .file('src/main/resources/extensions/roleTemplate.yaml').asFile.getText('UTF-8')
+        ['console.api.member.plugin.halo.run', 'resources: [ "members" ]',
+         'resources: [ "membersubmits/submit", "membersubmits/captcha" ]',
+         'resources: [ "plugins/membersubmits" ]', 'resourceNames: [ "PluginMembers" ]',
+         'resources: [ "members/statistics" ]',
+         'resources: [ "members/withdraw-requests" ]',
+         'resources: [ "members/withdraw-approve", "members/withdraw-reject" ]',
+         '- "members/batch-approve"', '- "members/export-csv"']
+            .each { marker ->
+                if (!roleTemplate.contains(marker)) {
+                    throw new GradleException("Role template is missing required access contract: ${marker}")
+                }
+            }
+        // Halo 把 CustomEndpoint 的 /-/xxx 解析为子资源且 POST 映射为 create，
+        // nonResourceURLs 与 "post" 动词永远不会命中，禁止再写回这种规则。
+        ['- nonResourceURLs:', 'verbs: [ "get", "post" ]'].each { marker ->
+            if (roleTemplate.contains(marker)) {
+                throw new GradleException("Role template uses an authorization rule Halo never matches: ${marker}")
+            }
+        }
+
+        def widgetSource = layout.projectDirectory
+            .file('widget/src/member-apply-widget.iife.js').asFile.getText('UTF-8')
+        if (!widgetSource.contains("credentials: 'omit'")) {
+            throw new GradleException('Member widget must submit anonymously without cookies')
+        }
+        if (widgetSource.contains("credentials: 'same-origin'")) {
+            throw new GradleException('Member widget must not send site cookies to the anonymous API')
+        }
+
+        def footerProcessor = layout.projectDirectory
+            .file('src/main/java/run/halo/members/MemberApplyWidgetFooterProcessor.java')
+            .asFile.getText('UTF-8')
+        ['data-widget-open="MemberApplyWidget"', 'class="member-apply-widget-floating-trigger"']
+            .each { marker ->
+                if (!footerProcessor.contains(marker)) {
+                    throw new GradleException("Member widget entry must use a data attribute: ${marker}")
+                }
+            }
+        ['onclick=', 'onmouseover=', 'onmouseout='].each { marker ->
+            if (footerProcessor.contains(marker)) {
+                throw new GradleException("Inline event handler is not allowed in widget footer: ${marker}")
+            }
+        }
+    }
+}
+
+tasks.register('verifyMcpApiNotPackaged') {
+    group = 'verification'
+    description = 'MCP Server API 必须只用于编译期，运行期由 mcp-server 插件提供。'
+    dependsOn('jar')
+    doLast {
+        def jarFile = tasks.jar.archiveFile.get().asFile
+        def zipFile = new java.util.zip.ZipFile(jarFile)
+        try {
+            def leaked = zipFile.entries().toList()
+                .findAll { it.name.contains('run/halo/mcpserver/') }
+                .collect { it.name }
+            if (leaked) {
+                throw new GradleException(
+                    "MCP Server API must remain compileOnly, found in JAR: ${leaked}")
+            }
+        } finally {
+            zipFile.close()
+        }
+    }
+}
+
+tasks.register('installDepsForUI', PnpmTask) {
+    args = ['install', '--frozen-lockfile']
+}
+tasks.named('compileJava') {
+    dependsOn('buildFrontend')
+}
+
+tasks.named('processResources') {
+    dependsOn('syncWidgetResources')
+}
+
+tasks.named('check') {
+    dependsOn('typecheckFrontend')
+    dependsOn('verifyVersionConsistency')
+    dependsOn('verifyUiSourceContracts')
+    dependsOn('verifySecurityContracts')
+    dependsOn('verifyMcpApiNotPackaged')
+}
+
+halo {
+    version = '2.27.1'
+}
+
+haloPlugin {
+    openApi {
+        outputDir = file("$rootDir/api-docs/openapi/v3_0")
+        groupingRules {
+            membersV1alpha1Api {
+                displayName = 'Extension API for Members'
+                pathsToMatch = [
+                    '/apis/member.plugin.halo.run/v1alpha1/members/**',
+                    '/apis/member.plugin.halo.run/v1alpha1/membergroups/**',
+                    '/apis/api.member.plugin.halo.run/v1alpha1/**',
+                    '/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/**',
+                    '/apis/console.api.member.plugin.halo.run/v1alpha1/**'
+                ]
+            }
+        }
+        groupedApiMappings = [
+                '/v3/api-docs/membersV1alpha1Api': 'membersV1alpha1Api.json'
+        ]
+        generator {
+            outputDir = file("${projectDir}/ui/src/api/generated")
+        }
+    }
+}
