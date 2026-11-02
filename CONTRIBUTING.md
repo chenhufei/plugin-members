@@ -1,0 +1,306 @@
+# 协同开发手册 / CONTRIBUTING
+
+适用仓库：**仅 `plugin-members`**。兄弟仓库 `theme-nucma`、`plugin-link-submit-next` 各有自己的 `CONTRIBUTING.md`；仓库边界、职责与分支模型见本仓 [COLLABORATION.md](COLLABORATION.md)。
+
+本文是本仓流程与规则的唯一入口，自身完整、不依赖维护者本机的其他文档。与 README 冲突时以本文为准；与代码里已有的既定契约冲突时，先提 issue 讨论，不要单方面改契约。
+
+---
+
+## 0. 三条底线
+
+1. **改前先同步，改后先自检**——基于过期代码改动是本项目冲突的第一来源。
+2. **协作者不碰 `main`**——一律开分支提 PR；`main` 是保护分支。
+3. **只改源码，不动生成物**——`src/main/resources/console/**`、`static/**`、`widget/src/*.iife.js` 由构建任务产出，手改必冲突。
+
+任何一条做不到，宁可不提交，也不要"先推上去再说"。
+
+---
+
+## 1. 角色与权限
+
+| 角色 | `main` 权限 | 要求 |
+|---|---|---|
+| 维护者 | 可直接 push | 每次发版必须打 annotated tag，并写 CHANGELOG |
+| 协作者 | 禁止 push | 开分支 → 推送 → 提 PR → 维护者 review 后合并；无例外 |
+
+协作者不负责打 tag、不建发行版、不改版本号（除非 PR 明确就是要发版，且维护者已指定版本号）。
+
+---
+
+## 2. 环境与拉取
+
+### 2.1 版本要求
+
+| 项目 | 要求 | 说明 |
+|---|---|---|
+| JDK | **21** | 用仓库自带 `./gradlew`，**不需要**全局装 Gradle |
+| pnpm | 10.22 | 由 Gradle 的 node 插件自动装到项目内，不必全局安装 |
+| Halo | ≥ 2.27.0 | `plugin.yaml` 的 `spec.requires` |
+
+（主题仓库需要 Node.js ≥ 22.12，见 theme-nucma 仓手册。）
+
+### 2.2 目录布局（联调时必须并列）
+
+```
+<任意父目录>/
+├── theme-nucma/
+├── plugin-members/
+└── plugin-link-submit-next/
+```
+
+三者不嵌套。Windows 下路径不要带空格。
+
+### 2.3 拉取
+
+```bash
+git clone https://gitee.com/xiui-cc/plugin-members.git
+```
+
+### 2.4 远程约定（重要）
+
+| 平台 | 地址形态 | 用途 |
+|---|---|---|
+| **Gitee（主）** | `gitee` → `https://gitee.com/xiui-cc/plugin-members.git` | 日常协作、分支、PR、发版，**全部在这里** |
+| GitHub（镜像） | `origin` | 只读分发，由 Gitee 的 Push 镜像自动同步（约 5 分钟） |
+
+两条铁律：
+
+- **不要推 GitHub。** GitHub 侧由 Gitee 镜像强制覆盖，直推的提交下次同步就被冲掉。
+- **不要在 GitHub 提 PR。** 同上，会被镜像覆盖。
+
+镜像只同步**分支与 tag**，不同步 Release 资产——GitHub 上没有 jar 属正常现象。
+
+---
+
+## 3. 标准流程（六步）
+
+### 第 1 步：同步
+
+```bash
+git pull --rebase gitee main
+```
+
+- 有未提交改动时先 `git stash -u`，拉完立刻 `git stash pop` 并处理冲突。
+- **拉取失败不得继续改动**，先报告，不要在冲突状态上叠改动。
+
+### 第 2 步：开分支
+
+```bash
+git switch -c feat/members-batch-load
+```
+
+命名：`feat/xxx`、`fix/xxx`、`docs/xxx`、`refactor/xxx`。一个 PR 一件事，不混装无关改动。
+
+### 第 3 步：改源码
+
+遵守第 4 节的硬约束。涉及版本敏感 API（Finder、扩展点、权限、`spec.requires`、通知模板）时，**先查官方文档与目标 Halo 版本源码**，不凭记忆猜字段。
+
+### 第 4 步：自检
+
+```bash
+./gradlew cleanTest test
+```
+
+测试必须全绿；新增功能必须带单测。
+
+### 第 5 步：出包
+
+```bash
+./gradlew.bat build -x test
+```
+
+`-x test` 只允许在测试已单独通过后用于打包，**不能替代测试**。产物：`build/libs/plugin-members-<ver>.jar`。
+
+### 第 6 步：提交与 PR
+
+提交格式见第 6 节，然后：
+
+```bash
+git push gitee HEAD
+```
+
+到 Gitee 提 PR 到 `main`。**不要**自行合并，也不要 `--force` 推别人的分支。
+
+---
+
+## 4. 改动中的硬约束
+
+### 4.1 只改源码
+
+以下**只能由构建任务生成**，禁止手改、禁止手工合并：
+
+| 生成物 | 来源 |
+|---|---|
+| `src/main/resources/console/**` | `ui/` 经 rsbuild 构建 |
+| `src/main/resources/static/member-apply-widget.*`、`static/vendor/jsQR.js` | `widget/` 构建 |
+| OpenAPI / 生成器产物 | 生成器 |
+
+### 4.2 插件后端（WebFlux）
+
+- 事件循环内不做 DNS、阻塞 IO、`.block()`、全表排序；需要阻塞段时整体 `Mono.fromCallable(...).subscribeOn(boundedElastic)`，并加超时。
+- Extension / Reconciler 注意生命周期，任务与监听器要能清理；Reconciler 内的响应式调用统一 `block(5s)` + 降级。
+- 公开 API 返回 RFC 7807 错误；匿名角色只开必要能力并加限流；成员敏感字段（email 等）不得从匿名端点外泄。
+- 判重、筛选优先下推索引（`ListOptions` + `equal(...)`），不要全表 `listAll` 后内存过滤；索引重建期查询失败要回退全表。
+- 缓存只缓存不可变副本，写入方负责失效；失效要按 key 精确清，不要全 pattern 扫。
+
+### 4.3 前端（ui / widget）
+
+- `ui/` 组件异常不得被 Dialog 吞掉，批量操作走后端单接口。
+- 版本跨大版本的依赖升级（如 vue-router 大版本）需单独 PR 并回归路由。
+
+### 4.4 行尾
+
+`.gitattributes` 已统一 `* text=auto eol=lf`（`*.bat` / `*.cmd` 为 CRLF）。不要把编辑器产生的整文件 CRLF 转换提交进去；误转用 `sed -i 's/\r$//'` 还原，再 `git diff --stat` 确认没有整文件 diff。
+
+---
+
+## 5. 验证
+
+| 场景 | 命令 |
+|---|---|
+| 全量测试 | `./gradlew cleanTest test`（**没有** `:ui` 子项目，不要加 `-x :ui:...`，会直接失败） |
+| UI 类型检查 | 包含在构建流程内 |
+| 打包 | `./gradlew.bat build -x test` |
+
+### 5.1 集成验证矩阵（至少覆盖）
+
+1. 未安装 theme-nucma → 插件默认页仍可独立渲染。
+2. 插件停用 → 主题侧成员区块降级，不报错。
+3. 匿名 / 登录 / 管理员 → 只能访问各自授权范围；匿名端点限流生效。
+4. 邮件通知：仅状态变化时发送，普通资料编辑不重复发。
+5. MCP 工具：查询需查看权限、写入需管理权限，`dryRun` 默认 true。
+
+---
+
+## 6. 提交与 PR 规范
+
+### 6.1 提交信息
+
+格式：`type(scope): 简述；版本号`
+
+```
+fix(members): 修复并发审核互相覆盖；0.0.2
+feat(members): 批量导入支持去重
+```
+
+`type`：`feat` / `fix` / `docs` / `refactor` / `chore` / `test`。
+纯文档改动不必带版本号。
+
+### 6.2 PR 描述模板
+
+```markdown
+## 改了什么
+（一两句，指向具体类 / 模块 / 端点）
+
+## 为什么
+（对应 issue 或现象；复现步骤）
+
+## 验证
+- [ ] ./gradlew cleanTest test 通过（新增逻辑带单测）
+- [ ] 已出完整 jar
+- [ ] 匿名 / 登录 / 管理员三态权限验证
+- [ ] 通知、缓存、限流等副作用已考虑
+
+## 文档
+README / CHANGELOG / docs 是否需要同批更新（需要则已在本 PR 内）
+```
+
+### 6.3 review 关注点（双方都看）
+
+- 业务校验、限流、存储有没有漏到主题里。
+- 生成物有没有被手改。
+- 公开端点是否遵循 RFC 7807、是否限流、是否泄露敏感字段。
+- 响应式链上有没有新增 `.block()`、有没有超时。
+- 版本文件是否一致、`spec.requires` 是否诚实。
+- 是否顺手改了无关文件（尤其是整文件 CRLF）。
+
+### 6.4 合并后
+
+删除远程分支；不要在共享分支上 `--force` 推送；不要 `rebase` 已推送的公共分支。
+
+---
+
+## 7. 版本与发版
+
+### 7.1 三档级别（先判级，再选号）
+
+| 级别 | 判定 | 典型改动 | 选号 |
+|---|---|---|---|
+| **大** | 体系级变化，破坏已有契约 | 删除 / 更名公开 API 与 Finder 字段、CRD 结构变更、抬高 Halo 最低版本、通知模板契约变更 | 升 `MINOR`，`PATCH` 归零（0.0.2 → **0.1.0**） |
+| **中** | 新增能力或成批修复，不破坏契约 | 新端点、新设置组、新 MCP 工具、同批修 3 个以上问题 | 升 `PATCH`（0.1.0 → **0.1.1**） |
+| **小** | 单点修复与打磨 | 单条 bug 修复、文案、依赖小版本跟进 | 升 `PATCH`（0.1.1 → **0.1.2**） |
+
+只有会进入安装包的内容变化才升版本；README、规则文档、测试代码改动不强制升版本。
+
+### 7.2 版本文件清单（任一处不一致不得发版）
+
+> **版本号只在发版提交里动（硬规则）**：本仓版本文件在**日常功能 / 修复提交中一律不改**。版本号由维护者在发版时统一升（见 7.3 第 1 步）；协作者发现改动需要升号，在 PR 描述或 issue 里提即可，**不要动手改版本文件**——包含版本号改动的 PR 会被要求先摘掉再合。日常对齐以 tag 为锚点：开工先 `git pull --ff-only`，发版后两边对齐同一个 tag 即版本一致。
+
+| 需同步的文件 | 校验方 |
+|---|---|
+| `build.gradle`、`src/main/resources/plugin.yaml`、`ui/package.json` | Gradle 构建校验三方一致，不一致直接失败 |
+
+`plugin.yaml` 的 `spec.requires` 必须是**实际验证过**的最低兼容版本，不能按编译 SDK 推断。
+
+### 7.3 发版七步（维护者）
+
+1. 汇总改动 → 按 7.1 判级选号 → 同步 7.2 全部版本文件。
+2. `./gradlew cleanTest test` → `./gradlew.bat build -x test`。
+3. 本地 Halo 实例安装验证（安装、启用、配置、主要流程、停用、卸载）。
+4. 追加 `CHANGELOG.md` 一条（版本号与 tag 一致，写清功能变化、修复、影响面）。
+5. 提交并打 **annotated** tag：
+
+   ```bash
+   git add -A
+   git commit -m "feat(members): 改动要点；x.y.z"
+   git tag -a x.y.z -m "x.y.z"
+   git push gitee main --follow-tags
+   ```
+
+6. Gitee 建发行版，挂原始 jar，发布说明按「级别 + 影响面 + 验证结果 + 未验证项」写。
+7. 校验资产：`curl -L` 下载一次比对字节数。**发行版 `assets[].size` 恒为 0，不能作为校验依据。**
+
+### 7.4 铁律
+
+- **tag 名直接用版本号，不加 `v` 前缀。**
+- **必须 `-a`**：`--follow-tags` 只推 annotated tag，轻量 tag 不会被带走。
+- **不跳号、不攒批**：一次发版一个 tag，中间版本缺失会让回退定位失效。
+- **不覆盖已发布 tag**：已推送的 tag 不删不重打，修复只能发新版本。
+- **回退用 `git revert`**，禁止 `reset --hard` 后强推。
+- 版本号一旦发出即为对外契约，只增不改；有问题按级别发新版本。
+
+### 7.5 当前版本
+
+| 版本 | 下一版 |
+|---|---|
+| **0.0.2** | 中/小级 → 0.0.3，大级 → 0.1.0 |
+
+覆盖安装：插件在「插件 → 安装」上传 jar，重复上传即为覆盖，设置与数据保留。
+
+---
+
+## 8. 文档同步（不做"下次一起改"）
+
+| 文件 | 何时必须更新 |
+|---|---|
+| `README.md` | 新增端点、设置分组、MCP 工具、环境要求、仓库地址变化 |
+| `CHANGELOG.md` | 每次发版追加一条，版本号与 tag 一致 |
+| `docs/API.md` | 公开 / 管理 API 契约变化 |
+| `docs/THEME-INTEGRATION.md` | 主题集成变量、Finder、Widget 契约变化 |
+| `COLLABORATION.md` | 分支模型、发版流程、远端与权限变化 |
+| `CONTRIBUTING.md`（本文） | 流程或硬约束变化 |
+
+---
+
+## 9. 完成定义（DoD）
+
+一个改动只有全部满足才算"做完"：
+
+- [ ] 自检通过（`./gradlew cleanTest test`），失败即未完成
+- [ ] 新增逻辑带单测；公开端点考虑了权限、限流与敏感字段
+- [ ] 响应式链无新增 `.block()`、阻塞段有超时与降级
+- [ ] 安装包内容有变化时：版本号按 7.1 判级、7.2 全部文件同步、出了完整 jar
+- [ ] 插件缺失 / 停用 / 版本不满足三态下主题侧不报错
+- [ ] `CHANGELOG.md` 已追加，相关 `README` / `docs` 同批更新
+- [ ] 提交信息合规，PR 描述含验证结果
+- [ ] 发版后：annotated tag 已推 Gitee、发行版已挂资产并做过字节校验

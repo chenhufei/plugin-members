@@ -1,0 +1,313 @@
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: admin-member-submit
+  annotations:
+    rbac.authorization.halo.run/ui-permissions: |
+      [ "plugin:members:manage" ]
+spec:
+  displayName: "成员申请通知管理员"
+  description: "有新的成员申请时通知管理员"
+  properties:
+    - name: adminUsername
+      type: string
+      description: "管理员用户名"
+    - name: adminEmail
+      type: string
+      description: "管理员邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: website
+      type: string
+      optional: true
+      description: "网站"
+    - name: description
+      type: string
+      optional: true
+      description: "简介"
+    - name: groupName
+      type: string
+      description: "分组"
+    - name: autoApproved
+      type: boolean
+      description: "是否自动审核"
+    - name: reviewUrl
+      type: string
+      description: "审核链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-submit
+spec:
+  displayName: "成员申请提交成功通知"
+  description: "提交成员申请后通知用户"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: groupName
+      type: string
+      description: "分组"
+    - name: memberUrl
+      type: string
+      description: "成员页面链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: review-member-submit
+spec:
+  displayName: "成员申请审核通过通知"
+  description: "管理员审核通过后通知用户"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: groupName
+      type: string
+      description: "分组"
+    - name: reviewDescription
+      type: string
+      optional: true
+      description: "审核描述"
+    - name: approved
+      type: boolean
+      description: "是否通过"
+    - name: memberUrl
+      type: string
+      description: "成员页面链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: review-member-reject
+spec:
+  displayName: "成员申请拒绝通知"
+  description: "管理员拒绝成员申请后通知用户"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: groupName
+      type: string
+      description: "分组"
+    - name: reviewDescription
+      type: string
+      optional: true
+      description: "拒绝理由"
+    - name: memberUrl
+      type: string
+      description: "成员页面链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: review-member-offline
+spec:
+  displayName: "成员下架通知"
+  description: "管理员下架已通过成员后通知申请人"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: school
+      type: string
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: groupName
+      type: string
+      description: "分组"
+    - name: offlineReason
+      type: string
+      description: "下架原因"
+    - name: memberUrl
+      type: string
+      description: "成员页面链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-withdraw-code
+spec:
+  displayName: "成员撤回验证码"
+  description: "发送成员撤回申请验证码"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: code
+      type: string
+      description: "验证码"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: admin-member-withdraw
+  annotations:
+    rbac.authorization.halo.run/ui-permissions: |
+      [ "plugin:members:manage" ]
+spec:
+  displayName: "成员撤回申请通知管理员"
+  description: "成员提交撤回申请时通知管理员"
+  properties:
+    - name: adminUsername
+      type: string
+      description: "管理员用户名"
+    - name: adminEmail
+      type: string
+      description: "管理员邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: withdrawEmail
+      type: string
+      description: "撤回邮箱"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: withdrawReason
+      type: string
+      description: "撤回原因"
+    - name: statusBefore
+      type: string
+      description: "撤回前状态"
+    - name: reviewUrl
+      type: string
+      description: "审核链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-withdraw-review
+spec:
+  displayName: "成员撤回审核结果通知"
+  description: "管理员处理成员撤回申请后通知用户"
+  properties:
+    - name: email
+      type: string
+      description: "邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: reviewResult
+      type: string
+      description: "审核结果"
+    - name: reviewStatus
+      type: string
+      description: "审核状态"
+    - name: status
+      type: string
+      description: "成员状态"
+    - name: withdrawReason
+      type: string
+      description: "撤回原因"
+    - name: reviewUrl
+      type: string
+      description: "审核链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-claim-link
+spec:
+  displayName: "成员认领链接通知"
+  description: "向成员发送 QQ 链接认领通知邮件"
+  properties:
+    - name: email
+      type: string
+      description: "收件邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: school
+      type: string
+      optional: true
+      description: "学校"
+    - name: qq
+      type: string
+      description: "QQ号"
+    - name: claimUrl
+      type: string
+      description: "认领链接"
+
+---
+
+apiVersion: notification.halo.run/v1alpha1
+kind: ReasonType
+metadata:
+  name: user-member-claim-code
+spec:
+  displayName: "成员认领验证码"
+  description: "发送 QQ 链接补全验证码"
+  properties:
+    - name: email
+      type: string
+      description: "收件邮箱"
+    - name: displayName
+      type: string
+      description: "成员姓名"
+    - name: code
+      type: string
+      description: "验证码"

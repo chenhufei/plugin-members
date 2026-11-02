@@ -1,0 +1,96 @@
+package run.halo.members.utils;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Iterator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+import org.apache.commons.lang3.StringUtils;
+
+/**
+ * 认领流程里的头像处理。
+ * <p>
+ * Halo 2.27 没有面向插件的匿名附件上传接口，自助认领只能把客户端压缩后的图片以
+ * data URL 写进 {@code Member.spec.avatar}；这里对入参做白名单与真实解码校验，
+ * 避免把任意字符串或 SVG 写进成员资料。
+ */
+public final class AvatarUtils {
+
+    public static final int MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+    public static final int MAX_EDGE = 512;
+    private static final String QLOGO_TEMPLATE = "https://q1.qlogo.cn/g?b=qq&nk=%s&s=640";
+    private static final Pattern DATA_URL =
+        Pattern.compile("^data:image/(png|jpeg|webp|bmp|gif);base64,([A-Za-z0-9+/=]+)$");
+
+    private AvatarUtils() {
+    }
+
+    /** 与成员自助申请保持同一份默认头像，未上传头像时补上 QQ 头像。 */
+    public static String defaultQqAvatar(String qq) {
+        String value = StringUtils.trimToEmpty(qq);
+        if (value.isEmpty()) {
+            return null;
+        }
+        return QLOGO_TEMPLATE.formatted(URLEncoder.encode(value, StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 校验 data URL 头像。
+     *
+     * @return 错误信息；合法时返回 {@code null}
+     */
+    public static String validateDataUrl(String avatar) {
+        if (avatar.length() > MAX_BYTES * 2) {
+            return "头像文件过大，请重新上传";
+        }
+        Matcher matcher = DATA_URL.matcher(avatar);
+        if (!matcher.matches()) {
+            return "头像格式不正确，请上传 JPG、PNG、WebP、BMP 或 GIF 图片";
+        }
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(matcher.group(2));
+        } catch (IllegalArgumentException error) {
+            return "头像数据损坏，请重新上传";
+        }
+        if (bytes.length > MAX_BYTES) {
+            return "头像文件过大，请重新上传";
+        }
+        // 只读图片头拿尺寸，不做整幅解码：一张声明 30000×30000 的小体积 PNG
+        // 在 ImageIO.read 时会直接分配数 GB 像素缓冲，匿名接口因此可被打爆内存。
+        int width;
+        int height;
+        try (ImageInputStream stream = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+            if (stream == null) {
+                return "头像图片无法识别，请重新上传";
+            }
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(stream);
+            if (!readers.hasNext()) {
+                return "头像图片无法识别，请重新上传";
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(stream, true, true);
+                width = reader.getWidth(0);
+                height = reader.getHeight(0);
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException | RuntimeException error) {
+            return "头像图片无法识别，请重新上传";
+        }
+        if (width <= 0 || height <= 0) {
+            return "头像图片无法识别，请重新上传";
+        }
+        if (width > MAX_EDGE || height > MAX_EDGE) {
+            return "头像尺寸不能超过 " + MAX_EDGE + "×" + MAX_EDGE + "，请重新上传";
+        }
+        return null;
+    }
+}
