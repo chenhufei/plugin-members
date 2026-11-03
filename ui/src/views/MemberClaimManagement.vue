@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
 import { axiosInstance } from "@halo-dev/api-client";
 import { errorMessage } from "@/utils/error";
+import { formatDatetime } from "@/utils/date";
 
 const CLAIM_API_BASE = "/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers";
 
@@ -403,7 +404,7 @@ const groupLabel = (item: { groupName?: string; groupDisplayName?: string }) =>
             <td class="px-4 py-3 text-sm">{{ groupLabel(claim) }}</td>
             <td class="px-4 py-3 text-sm">{{ claim.qq || "-" }}</td>
             <td class="px-4 py-3 text-sm">
-              {{ claim.expiresAt ? new Date(claim.expiresAt).toLocaleString() : "-" }}
+              {{ claim.expiresAt ? formatDatetime(claim.expiresAt) : "-" }}
             </td>
             <td class="px-4 py-3">
               <span

@@ -45,6 +45,16 @@ export interface MemberGroup {
   };
 }
 
+/**
+ * JSON Patch 操作（RFC 6902）。成员与分组的编辑走 PATCH，
+ * 载荷形态固定为「操作 + 路径 + 值」，这里给出类型避免调用处各写各的。
+ */
+export interface JsonPatchOperation {
+  op: "add" | "replace" | "remove";
+  path: string;
+  value?: unknown;
+}
+
 export interface CronMemberSubmit {
   apiVersion: "member.plugin.halo.run/v1alpha1";
   kind: "CronMemberSubmit";

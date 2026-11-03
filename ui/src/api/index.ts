@@ -1,5 +1,5 @@
 import { axiosInstance } from "@halo-dev/api-client";
-import type { CronMemberSubmit, Member, MemberGroup } from "@/types";
+import type { CronMemberSubmit, JsonPatchOperation, Member, MemberGroup } from "@/types";
 
 const baseURL = "/apis/member.plugin.halo.run/v1alpha1";
 const batchBaseURL = "/apis/api.member.plugin.halo.run/v1alpha1";
@@ -33,18 +33,14 @@ export interface BatchOperationResult {
 interface MembersCoreApiClient {
   member: {
     list: (params?: { page?: number; size?: number }) => ApiResponse<ListResult<Member>>;
-    get: (name: string) => ApiResponse<Member>;
-    create: (member: unknown) => ApiResponse<Member>;
-    update: (name: string, member: unknown) => ApiResponse<Member>;
-    patch: (name: string, patch: unknown[]) => ApiResponse<Member>;
+    create: (member: Member) => ApiResponse<Member>;
+    patch: (name: string, patch: JsonPatchOperation[]) => ApiResponse<Member>;
     delete: (name: string) => ApiResponse<unknown>;
   };
   memberGroup: {
     list: () => ApiResponse<ListResult<MemberGroup>>;
-    get: (name: string) => ApiResponse<MemberGroup>;
-    create: (group: unknown) => ApiResponse<MemberGroup>;
-    update: (name: string, group: unknown) => ApiResponse<MemberGroup>;
-    patch: (name: string, patch: unknown[]) => ApiResponse<MemberGroup>;
+    create: (group: MemberGroup) => ApiResponse<MemberGroup>;
+    patch: (name: string, patch: JsonPatchOperation[]) => ApiResponse<MemberGroup>;
     delete: (name: string) => ApiResponse<unknown>;
   };
   cronMemberSubmit: {
@@ -80,16 +76,10 @@ export const membersCoreApiClient: MembersCoreApiClient = {
     list: (params?: { page?: number; size?: number }) => {
       return axiosInstance.get(`${baseURL}/members`, { params });
     },
-    get: (name: string) => {
-      return axiosInstance.get(`${baseURL}/members/${name}`);
-    },
-    create: (member: any) => {
+    create: (member: Member) => {
       return axiosInstance.post(`${baseURL}/members`, member);
     },
-    update: (name: string, member: any) => {
-      return axiosInstance.put(`${baseURL}/members/${name}`, member);
-    },
-    patch: (name: string, patch: any[]) => {
+    patch: (name: string, patch: JsonPatchOperation[]) => {
       return axiosInstance.patch(`${baseURL}/members/${name}`, patch, {
         headers: { "Content-Type": "application/json-patch+json" },
       });
@@ -102,16 +92,10 @@ export const membersCoreApiClient: MembersCoreApiClient = {
     list: () => {
       return axiosInstance.get(`${baseURL}/membergroups`);
     },
-    get: (name: string) => {
-      return axiosInstance.get(`${baseURL}/membergroups/${name}`);
-    },
-    create: (group: any) => {
+    create: (group: MemberGroup) => {
       return axiosInstance.post(`${baseURL}/membergroups`, group);
     },
-    update: (name: string, group: any) => {
-      return axiosInstance.put(`${baseURL}/membergroups/${name}`, group);
-    },
-    patch: (name: string, patch: any[]) => {
+    patch: (name: string, patch: JsonPatchOperation[]) => {
       return axiosInstance.patch(`${baseURL}/membergroups/${name}`, patch, {
         headers: { "Content-Type": "application/json-patch+json" },
       });

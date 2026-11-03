@@ -111,6 +111,8 @@ git switch -c feat/members-batch-load
 
 `-x test` 只允许在测试已单独通过后用于打包，**不能替代测试**。产物：`build/libs/plugin-members-<ver>.jar`。
 
+控制台前端由 Gradle 关联任务自动构建并打进 jar（`buildFrontend` → `processResources` → `jar`），**不要**手工跑 `pnpm build` 再拷 `src/main/resources/console`——顺序错了会让 jar 里留着上一版控制台，表现为「代码改了、jar 也打了，线上还是旧界面」。
+
 **装到本地 Halo 验证时不能直接替换 jar**：把新 jar 丢进 `data/plugins/` 后 pf4j 不会加载（插件仿佛消失、端点 404）。必须走控制台接口：
 
 ```bash

@@ -189,14 +189,14 @@ spec:
 
     # ===== 5. 学校关联分析：关系网连线（调用 AI Foundation）=====
     - group: affinity
-      label: 学校关联分析（关系网连线）
+      label: 关系网分析
       formSchema:
         - $formkit: switch
           id: affinityEnabled
           name: affinityEnabled
           key: affinityEnabled
           label: 启用学校关联分析
-          help: 开启后，成员关系网视图会调用 AI Foundation 的默认语言模型，判断成员所属学校之间是否存在关联，并以粗细不同的连线呈现。需先安装并启用 AI Foundation 并配置默认模型；分析结果缓存 30 分钟，关闭后立即停止调用。
+          help: 本组管「允不允许算、算什么」，主题「成员页与关系网」组管「画不画、怎么画」，两处都打开才会出现连线。开启后，成员关系网视图会调用 AI Foundation 的默认语言模型，判断成员所属学校之间是否存在关联，并以粗细不同的连线呈现。需先安装并启用 AI Foundation 并配置默认模型；分析结果缓存 30 分钟，关闭后立即停止调用。
           value: false
         - $formkit: select
           id: affinityAspects

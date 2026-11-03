@@ -122,6 +122,16 @@ const {
 const members = computed<Member[]>(() => membersData.value?.items || []);
 const total = computed(() => membersData.value?.total || 0);
 
+// 删掉末页最后一条时，总页数会变少，但 page 仍停在旧值——列表空白、分页器显示空页。
+// total 一变就校正一次，这是唯一能同时覆盖「单条删除」「批量删除」「筛选后变少」的位置。
+watch(total, (value) => {
+  if (page.value <= 1) return;
+  const maxPage = Math.max(1, Math.ceil(value / size.value));
+  if (page.value > maxPage) {
+    page.value = maxPage;
+  }
+});
+
 watch(selectedMembers, (value) => {
   checkedAll.value = Boolean(members.value.length) && value.length === members.value.length;
 });

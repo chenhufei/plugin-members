@@ -54,7 +54,7 @@ function openFrontend() {
 </script>
 
 <template>
-  <VPageHeader title="成员自助提交管理">
+  <VPageHeader title="申请记录">
     <template #actions>
       <VButton size="sm" @click="router.push('/members')">
         <template #icon><IconArrowLeft /></template>

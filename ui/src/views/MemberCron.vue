@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { membersCoreApiClient } from "@/api";
+import { useUiPermissions } from "@/composables/use-ui-permissions";
 import type { CronMemberSubmit } from "@/types";
 import { formatDatetime } from "@/utils/date";
 import {
@@ -13,6 +14,31 @@ import { useMutation, useQuery } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
 
 const TASK_NAME = "cron-member-submit-default";
+
+const { can } = useUiPermissions();
+const canManage = computed(() => can("plugin:members:manage"));
+
+// Spring 的 @Scheduled 只认 6 段（秒 分 时 日 月 周）与 7 个 @ 预设。
+// 这里只做形状校验，不判断取值是否越界——越界由调度器在保存后报错，
+// 但至少不再让「随便打一串字」静默保存成不跑的任务。
+const CRON_PRESETS = [
+  "@yearly",
+  "@annually",
+  "@monthly",
+  "@weekly",
+  "@daily",
+  "@midnight",
+  "@hourly",
+];
+const CRON_FIELD = /^[0-9*/,?LW#-]+$/i;
+
+function isValidCronExpression(value?: string) {
+  const raw = (value || "").trim();
+  if (!raw) return false;
+  if (CRON_PRESETS.includes(raw.toLowerCase())) return true;
+  const parts = raw.split(/\s+/);
+  return parts.length === 6 && parts.every((part) => CRON_FIELD.test(part));
+}
 
 function createDefaultTask(): CronMemberSubmit {
   return {
@@ -71,6 +97,17 @@ const { mutate: save, isLoading: isSaving } = useMutation({
 function formatStatusTime(value?: string) {
   return value ? formatDatetime(value) : "尚未执行";
 }
+
+function handleSubmit() {
+  if (!canManage.value) return;
+  if (!isValidCronExpression(formState.value.spec.cron)) {
+    Toast.error(
+      "执行周期格式不正确：可填 @daily / @weekly 等预设，或 6 段 Spring Cron（秒 分 时 日 月 周），例如 0 0 3 * * *"
+    );
+    return;
+  }
+  save();
+}
 </script>
 
 <template>
@@ -91,7 +128,8 @@ function formatStatusTime(value?: string) {
       id="member-cron-setting"
       type="form"
       :actions="false"
-      @submit="save"
+      :disabled="!canManage"
+      @submit="handleSubmit"
     >
       <FormKit
         v-model="formState.spec.enabled"
@@ -108,7 +146,7 @@ function formatStatusTime(value?: string) {
         allow-create
         validation="required"
         :options="cronOptions"
-        help="可选择常用周期，也可填写 Spring Cron 表达式"
+        help="可选常用周期，也可填写 6 段 Spring Cron（秒 分 时 日 月 周），例如 0 0 3 * * *"
       />
       <FormKit
         v-model="formState.spec.cleanupRejected"

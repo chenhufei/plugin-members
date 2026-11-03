@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '0.0.4'
+version '0.0.5'
 
 repositories {
     maven { url 'https://maven.aliyun.com/repository/public' }
@@ -224,6 +224,10 @@ tasks.named('compileJava') {
 
 tasks.named('processResources') {
     dependsOn('syncWidgetResources')
+    // 控制台前端产物输出到 src/main/resources/console（rsbuild 生产模式），
+    // 必须保证它先于 processResources 跑完，否则打进 jar 的是上一版控制台 ——
+    // 表现为「代码改了、jar 也重新打了，线上却还是旧界面」。
+    dependsOn('buildFrontend')
 }
 
 tasks.named('check') {

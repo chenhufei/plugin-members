@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { membersCoreApiClient } from "@/api";
 import { invalidateMemberViews } from "@/api/query-keys";
-import type { Member, MemberFormState } from "@/types";
+import type { JsonPatchOperation, Member, MemberFormState } from "@/types";
 import { Dialog, Toast, VButton, VModal, VSpace } from "@halo-dev/components";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import { useTemplateRef } from "vue";
@@ -33,7 +33,7 @@ const { mutate, isPending } = useMutation({
         ? { "member.plugin.halo.run/review-notification": "pending" }
         : {}),
     };
-    const jsonPatchInner = [
+    const jsonPatchInner: JsonPatchOperation[] = [
       { op: "add", path: "/spec/displayName", value: data.displayName },
       { op: "add", path: "/spec/email", value: data.email || "" },
       { op: "add", path: "/spec/school", value: data.school || "" },
