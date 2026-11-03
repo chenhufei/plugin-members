@@ -15,8 +15,10 @@ import {
   VStatusDot,
 } from "@halo-dev/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { approveWithdraw, getWithdrawRequests, rejectWithdraw } from "@/api";
+import { invalidateMemberViews, QK_WITHDRAW_REQUESTS } from "@/api/query-keys";
+import { useUiPermissions } from "@/composables/use-ui-permissions";
 import { formatDatetime } from "@/utils/date";
 
 interface WithdrawRecord {
@@ -46,24 +48,24 @@ interface WithdrawRecordList {
 }
 
 const queryClient = useQueryClient();
+const { can } = useUiPermissions();
+const canManage = computed(() => can("plugin:members:manage"));
 const approvingName = ref<string>();
 const rejectingName = ref<string>();
 
 const { data, isLoading, isFetching, refetch } = useQuery<WithdrawRecordList>({
-  queryKey: ["plugin:members:withdraw-requests"],
+  queryKey: [QK_WITHDRAW_REQUESTS],
+  // 这个接口只有 manage 能读：权限不足时干脆不发请求，避免控制台刷一屏 403。
+  enabled: () => canManage.value,
   queryFn: async () => {
     const { data } = await getWithdrawRequests();
     return data;
   },
-  refetchInterval: 30000,
+  refetchInterval: () => (canManage.value ? 30000 : false),
 });
 
 async function invalidateMemberQueries() {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["plugin:members:withdraw-requests"] }),
-    queryClient.invalidateQueries({ queryKey: ["plugin:members:members"] }),
-    queryClient.invalidateQueries({ queryKey: ["member-submits"] }),
-  ]);
+  await invalidateMemberViews(queryClient);
 }
 
 const approveMutation = useMutation({
@@ -204,7 +206,7 @@ function recordStatus(record: WithdrawRecord) {
           </VEntityField>
           <VEntityField v-if="record.recordStatus === 'PENDING'" class=":uno: min-w-[132px]">
             <template #description>
-              <VSpace spacing="xs" class=":uno: justify-end">
+              <VSpace v-permission="['plugin:members:manage']" spacing="xs" class=":uno: justify-end">
                 <VButton
                   size="sm"
                   type="secondary"

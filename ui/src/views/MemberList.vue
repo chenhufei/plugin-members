@@ -12,6 +12,7 @@ import {
 import { useQuery } from "@tanstack/vue-query";
 import { computed, defineAsyncComponent, ref, shallowRef } from "vue";
 import { membersBatchApiClient, membersCoreApiClient } from "@/api";
+import { QK_GROUPED_MEMBERS } from "@/api/query-keys";
 import TeamLineIcon from "@/components/TeamLineIcon";
 import ListFilterSelect from "@/components/ListFilterSelect.vue";
 
@@ -48,7 +49,7 @@ const sortFilterOptions = [
 ];
 
 const { data, isLoading, isFetching, refetch } = useQuery<GroupWithMembers[]>({
-  queryKey: ["plugin:members:grouped-members", selectedStatusFilter, selectedSortFilter],
+  queryKey: [QK_GROUPED_MEMBERS, selectedStatusFilter, selectedSortFilter],
   queryFn: async () => {
     const { data: groupsData } = await membersCoreApiClient.memberGroup.list();
     const params: Record<string, unknown> = { page: 1, size: 10000 };
@@ -74,7 +75,13 @@ const filteredGroups = computed(() => data.value || []);
     </template>
     <template #actions>
       <VButton size="sm" type="secondary" @click="$router.push('/members/submits')">自助提交管理</VButton>
-      <VButton size="sm" type="secondary" @click="$router.push('/members/claims')">认领链接</VButton>
+      <!-- /members/claims 路由要求 manage：只有 view 的账号点进去只会看到无权限页。 -->
+      <VButton
+        v-permission="['plugin:members:manage']"
+        size="sm"
+        type="secondary"
+        @click="$router.push('/members/claims')"
+      >认领链接</VButton>
       <VButton @click="handleRouteToFront" size="sm" ghost>
         <template #icon>
           <IconExternalLinkLine />

@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { membersCoreApiClient } from "@/api";
-import { QK_MEMBER_GROUPS } from "@/composables/use-group-fetch";
-import { QK_MEMBERS } from "@/composables/use-member-fetch";
+import { invalidateMemberViews } from "@/api/query-keys";
 import type { Member } from "@/types";
+import { errorMessage } from "@/utils/error";
 import { Toast, VButton, VModal, VSpace } from "@halo-dev/components";
 import { useQueryClient } from "@tanstack/vue-query";
 import { computed, ref, useTemplateRef } from "vue";
@@ -60,17 +60,12 @@ async function submit() {
       },
     ]);
     Toast.success(props.action === "OFFLINE" ? "成员已下架" : "申请已拒绝");
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] }),
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] }),
-      queryClient.invalidateQueries({ queryKey: ["member-submits"] }),
-      queryClient.invalidateQueries({ queryKey: ["plugin:members:withdraw-requests"] }),
-    ]);
+    await invalidateMemberViews(queryClient);
     emit("success");
     modal.value?.close();
   } catch (error) {
     console.error("Failed to update member review status", error);
-    Toast.error("操作失败");
+    Toast.error(errorMessage(error, "操作失败"));
   } finally {
     saving.value = false;
   }

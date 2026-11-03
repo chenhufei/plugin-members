@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { membersCoreApiClient } from "@/api";
-import { QK_MEMBER_GROUPS } from "@/composables/use-group-fetch";
+import { invalidateMemberGroupViews } from "@/api/query-keys";
 import type { GroupFormState, MemberGroup } from "@/types";
 import { Toast, VButton, VModal, VSpace } from "@halo-dev/components";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
@@ -29,7 +29,7 @@ const { mutate, isPending } = useMutation({
   onSuccess: () => {
     Toast.success("编辑分组成功");
     modal.value?.close();
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] });
+    void invalidateMemberGroupViews(queryClient);
   },
 });
 

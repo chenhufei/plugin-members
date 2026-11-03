@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   name: PluginMembers
 spec:
-  version: 0.0.3
+  version: 0.0.4
   requires: ">=2.27.0"
   pluginDependencies:
     mcp-server?: ">=1.3.0 & <2.0.0"

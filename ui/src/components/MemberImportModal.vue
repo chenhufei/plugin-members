@@ -1,36 +1,57 @@
 <script lang="ts" setup>
+import { membersBatchApiClient, type BatchOperationResult } from "@/api";
+import { invalidateMemberViews } from "@/api/query-keys";
+import { useMemberGroupFetch } from "@/composables/use-group-fetch";
+import { errorMessage } from "@/utils/error";
 import { VButton, VModal, VSpace, Toast } from "@halo-dev/components";
-import { useTemplateRef, ref } from "vue";
-import { useMutation } from "@tanstack/vue-query";
-import { axiosInstance } from "@halo-dev/api-client";
+import { useTemplateRef, ref, computed } from "vue";
+import { useMutation, useQueryClient } from "@tanstack/vue-query";
 
 const emit = defineEmits<{ (event: "close"): void }>();
+const queryClient = useQueryClient();
 const modal = useTemplateRef<InstanceType<typeof VModal> | null>("modal");
 const fileInput = useTemplateRef<HTMLInputElement | null>("fileInput");
 const selectedFile = ref<File | null>(null);
 const defaultGroup = ref("");
 
+// 只列真实存在的分组：这个值是直接写进 spec.groupName 的，
+// 写成不存在的名字不会报错，只会在前台悄悄归入「未分组」。
+const { groups } = useMemberGroupFetch();
+const groupOptions = computed(() => [
+  { label: "不指定（保留 CSV 里的分组）", value: "" },
+  ...(groups.value || []).map((group) => ({
+    label: `${group.spec.displayName}（${group.metadata.name}）`,
+    value: group.metadata.name,
+  })),
+]);
+
 const importMutation = useMutation({
   mutationFn: async ({ csvData, defaultGroup }: { csvData: string; defaultGroup: string }) => {
-    const { data } = await axiosInstance.post(
-      "/apis/api.member.plugin.halo.run/v1alpha1/members/-/import-csv",
-      { csvData, defaultGroup: defaultGroup || null }
-    );
-    return data;
+    const { data } = await membersBatchApiClient.member.importCsv(csvData, defaultGroup);
+    return data as BatchOperationResult;
   },
   onSuccess: (data) => {
-    const success = data.succeeded || 0;
-    const failed = data.failed || 0;
+    // 后端字段是 success / failed / total，早先读的 `succeeded` 并不存在，
+    // 于是「成功」永远显示 0。这里按类型读，写错字段名会直接编译报错。
+    const success = data.success ?? 0;
+    const failed = data.failed ?? 0;
+    const total = data.total ?? success + failed;
     if (failed > 0) {
-      Toast.warning(`导入完成：成功 ${success} 个，失败 ${failed} 个`);
+      const preview = data.failedMembers?.slice(0, 3).join("、");
+      const more = (data.failedMembers?.length ?? 0) > 3 ? " 等" : "";
+      Toast.warning(
+        `导入完成：成功 ${success} 个，失败 ${failed} 个（共 ${total} 条）`
+          + (preview ? `；失败行：${preview}${more}` : "")
+      );
     } else {
       Toast.success(`成功导入 ${success} 个成员`);
     }
+    void invalidateMemberViews(queryClient);
     modal.value?.close();
     emit("close");
   },
-  onError: (error: any) => {
-    Toast.error(error.response?.data?.message || error.message || "导入失败");
+  onError: (error) => {
+    Toast.error(errorMessage(error, "导入失败"));
   },
 });
 
@@ -63,9 +84,12 @@ const handleImport = () => {
 };
 
 const downloadTemplate = () => {
+  // 示例里的分组必须写资源名（不是「校友」这种显示名），否则照模板导入的人
+  // 全员落进「未分组」——旧模板就是栽在这里。优先用当前选中的默认分组。
+  const sampleGroup = defaultGroup.value || groups.value?.[0]?.metadata.name || "";
   const template = `displayName,email,school,qq,groupName,qqFriendLink
-张三,zhangsan@example.com,清华大学,123456789,校友,
-李四,lisi@example.com,北京大学,987654321,校友,`;
+张三,zhangsan@example.com,清华大学,123456789,${sampleGroup},
+李四,lisi@example.com,北京大学,987654321,${sampleGroup},`;
   const blob = new Blob([template], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -88,17 +112,18 @@ const downloadTemplate = () => {
           @change="handleFileSelect"
         />
         <p class="mt-1 text-xs text-gray-500">
-          CSV 文件需包含表头，支持字段：displayName(账号名称)、email(邮箱)、school(学校)、qq(QQ号)、groupName(分组)、qqFriendLink(QQ链接)
+          CSV 文件需包含表头，支持字段：displayName(账号名称)、email(邮箱)、school(学校)、qq(QQ号)、groupName(分组标识)、qqFriendLink(QQ链接)
         </p>
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">默认分组（可选）</label>
-        <input
+        <FormKit
           v-model="defaultGroup"
-          type="text"
-          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-          placeholder="如果 CSV 中未指定分组，将使用此默认分组"
+          type="select"
+          name="import-default-group"
+          :options="groupOptions"
+          :help="`CSV 的 groupName 列只写分组的标识（括号里的英文名），不是显示名；留空的行使用这里的默认分组。当前可选 ${groupOptions.length - 1} 个分组。`"
         />
       </div>
 

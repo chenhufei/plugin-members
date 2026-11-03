@@ -28,6 +28,7 @@ import run.halo.app.extension.Metadata;
 import run.halo.app.extension.MetadataUtil;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.members.Member;
+import run.halo.members.MemberGroup;
 import run.halo.members.finders.impl.MemberFinderImpl;
 import run.halo.members.service.MemberBatchService;
 import static run.halo.members.MemberConstant.REVIEW_NOTIFICATION;
@@ -231,8 +232,13 @@ public class MemberBatchServiceImpl implements MemberBatchService {
                 if (node.has("school")) spec.setSchool(node.get("school").asText());
                 if (node.has("qq")) spec.setQq(node.get("qq").asText());
                 if (node.has("groupName")) {
-                    spec.setGroupName(node.get("groupName").asText());
-                } else if (defaultGroup != null) {
+                    String groupName = node.get("groupName").asText("");
+                    if (!groupName.isBlank()) {
+                        spec.setGroupName(groupName.trim());
+                    } else if (defaultGroup != null && !defaultGroup.isBlank()) {
+                        spec.setGroupName(defaultGroup);
+                    }
+                } else if (defaultGroup != null && !defaultGroup.isBlank()) {
                     spec.setGroupName(defaultGroup);
                 }
                 if (node.has("qqFriendLink")) spec.setQqFriendLink(node.get("qqFriendLink").asText());
@@ -244,7 +250,8 @@ public class MemberBatchServiceImpl implements MemberBatchService {
             return rows;
         })
             .subscribeOn(Schedulers.boundedElastic())
-            .flatMap(rows -> importRows(rows, "JSON数据为空"));
+            .flatMap(rows -> resolveGroupNames(rows)
+                .flatMap(resolved -> importRows(resolved, "JSON数据为空")));
     }
 
     @Override
@@ -279,6 +286,11 @@ public class MemberBatchServiceImpl implements MemberBatchService {
                     // 列数不足按空值补齐。旧实现直接 continue 丢掉整行：
                     // 导 100 行只入库 90 行却报"全部成功"，用户无从发现。
                     String value = j < parsed.length ? stripBom(parsed[j]).trim() : "";
+                    // 空单元格不写字段：写进去是空字符串，而「未填分组」的判定用的是
+                    // groupName == null，空串会绕过默认分组变成「空名字分组」。
+                    if (value.isEmpty()) {
+                        continue;
+                    }
                     switch (headers.get(j)) {
                         case "displayName", "账号名称" -> spec.setDisplayName(value);
                         case "email", "邮箱" -> spec.setEmail(value);
@@ -292,7 +304,7 @@ public class MemberBatchServiceImpl implements MemberBatchService {
                     }
                 }
 
-                if (spec.getGroupName() == null && defaultGroup != null) {
+                if (spec.getGroupName() == null && defaultGroup != null && !defaultGroup.isBlank()) {
                     spec.setGroupName(defaultGroup);
                 }
                 spec.setStatus("PENDING");
@@ -301,7 +313,60 @@ public class MemberBatchServiceImpl implements MemberBatchService {
             return rows;
         })
             .subscribeOn(Schedulers.boundedElastic())
-            .flatMap(rows -> importRows(rows, "CSV数据为空"));
+            .flatMap(rows -> resolveGroupNames(rows)
+                .flatMap(resolved -> importRows(resolved, "CSV数据为空")));
+    }
+
+    /**
+     * 把导入行里的分组值解析成真实的分组资源名。
+     *
+     * <p>入库的 {@code spec.groupName} 必须等于 {@code MemberGroup.metadata.name}，
+     * 否则前台按分组聚合时这一行谁也不认识，直接落进「未分组」。
+     * 而 CSV 模板和手工编辑里，人写的往往是分组的<b>显示名</b>（「校友」而不是
+     * {@code alumni}）——旧实现不做任何解析，照着模板导入就是全员未分组，
+     * 且不会报错，站长只能在前台发现分组是空的。
+     *
+     * <p>这里两种写法都认：命中资源名原样保留，命中显示名换成资源名；
+     * 两种都不是时保留原值（旧数据里可能真有手写的分组名，静默改掉更糟），只记一条日志。
+     */
+    private Mono<List<ImportRow>> resolveGroupNames(List<ImportRow> rows) {
+        boolean hasGroup = rows.stream()
+            .anyMatch(row -> trimToNull(row.spec().getGroupName()) != null);
+        if (!hasGroup) {
+            return Mono.just(rows);
+        }
+
+        return client.listAll(MemberGroup.class, new ListOptions(), ExtensionUtil.defaultSort())
+            .collectList()
+            .map(groups -> {
+                Map<String, String> aliasToName = new HashMap<>();
+                for (MemberGroup group : groups) {
+                    String name = group.getMetadata() == null ? null : group.getMetadata().getName();
+                    if (name == null) {
+                        continue;
+                    }
+                    aliasToName.put(name, name);
+                    String displayName = group.getSpec() == null
+                        ? null : trimToNull(group.getSpec().getDisplayName());
+                    if (displayName != null) {
+                        // 两个分组显示名相同时以先到者为准，不覆盖已建立的映射
+                        aliasToName.putIfAbsent(displayName, name);
+                    }
+                }
+                for (ImportRow row : rows) {
+                    String raw = trimToNull(row.spec().getGroupName());
+                    if (raw == null) {
+                        continue;
+                    }
+                    String resolved = aliasToName.get(raw);
+                    if (resolved == null) {
+                        log.warn("导入的分组不存在，保留原值: group={}, row={}", raw, row.label());
+                        continue;
+                    }
+                    row.spec().setGroupName(resolved);
+                }
+                return rows;
+            });
     }
 
     /**

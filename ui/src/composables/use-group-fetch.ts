@@ -1,9 +1,10 @@
 import { membersCoreApiClient } from "@/api";
+import { QK_MEMBER_GROUPS } from "@/api/query-keys";
 import type { MemberGroup } from "@/types";
 import { useQuery } from "@tanstack/vue-query";
 import { computed } from "vue";
 
-export const QK_MEMBER_GROUPS = "plugin:members:member-groups";
+export { QK_MEMBER_GROUPS };
 
 export function useMemberGroupFetch() {
   const { data, isLoading, refetch } = useQuery({

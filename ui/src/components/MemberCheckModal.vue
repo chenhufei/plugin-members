@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { membersCoreApiClient } from "@/api";
-import { QK_MEMBER_GROUPS } from "@/composables/use-group-fetch";
-import { QK_MEMBERS } from "@/composables/use-member-fetch";
+import { invalidateMemberViews } from "@/api/query-keys";
 import type { Member } from "@/types";
 import { formatDatetime } from "@/utils/date";
 import { Toast, VAvatar, VButton, VModal, VSpace, VTag } from "@halo-dev/components";
@@ -66,9 +65,7 @@ async function handleCheck() {
     console.error("Failed to check Member", error);
     Toast.error("审核失败");
   } finally {
-    queryClient.invalidateQueries({ queryKey: ["member-submits"] });
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] });
+    void invalidateMemberViews(queryClient);
     saving.value = false;
   }
 }
@@ -93,9 +90,7 @@ async function handleRevert() {
     console.error("Failed to revert Member review", error);
     Toast.error("撤回审核失败");
   } finally {
-    queryClient.invalidateQueries({ queryKey: ["member-submits"] });
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] });
+    void invalidateMemberViews(queryClient);
     saving.value = false;
   }
 }

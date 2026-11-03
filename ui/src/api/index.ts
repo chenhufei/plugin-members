@@ -68,6 +68,10 @@ interface MembersBatchApiClient {
     ) => ApiResponse<BatchOperationResult>;
     exportCsv: (memberNames?: string[]) => ApiResponse<string>;
     exportJson: (memberNames?: string[]) => ApiResponse<string>;
+    importCsv: (
+      csvData: string,
+      defaultGroup?: string | null
+    ) => ApiResponse<BatchOperationResult>;
   };
 }
 
@@ -159,6 +163,12 @@ export const membersBatchApiClient: MembersBatchApiClient = {
     exportJson: (memberNames: string[] = []) => {
       return axiosInstance.post(`${batchBaseURL}/members/-/export-json`, {
         memberNames,
+      });
+    },
+    importCsv: (csvData: string, defaultGroup?: string | null) => {
+      return axiosInstance.post(`${batchBaseURL}/members/-/import-csv`, {
+        csvData,
+        defaultGroup: defaultGroup || null,
       });
     },
   },

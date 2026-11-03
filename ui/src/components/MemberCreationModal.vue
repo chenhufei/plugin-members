@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { membersCoreApiClient } from "@/api";
-import { QK_MEMBERS } from "@/composables/use-member-fetch";
+import { invalidateMemberViews } from "@/api/query-keys";
 import type { MemberGroup } from "@/types";
 import type { MemberFormState } from "@/types";
 import { Toast, VButton, VModal, VSpace } from "@halo-dev/components";
@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import { computed, useTemplateRef } from "vue";
 import MemberForm from "./MemberForm.vue";
 import { qqAvatar } from "@/utils/qq-link";
+import { errorMessage } from "@/utils/error";
 
 const props = defineProps<{
   group?: MemberGroup;
@@ -48,7 +49,13 @@ const { mutate, isPending } = useMutation({
   onSuccess: () => {
     Toast.success("创建成员成功");
     modal.value?.close();
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
+    void invalidateMemberViews(queryClient);
+  },
+  // 缺 onError 时后端拒绝（QQ 重复、名称为空、权限不足）在界面上毫无反应：
+  // 只有按钮从 loading 回到正常，站长会以为没点上。
+  onError: (error) => {
+    console.error("Failed to create member", error);
+    Toast.error(errorMessage(error, "创建成员失败，请检查填写内容"));
   },
 });
 

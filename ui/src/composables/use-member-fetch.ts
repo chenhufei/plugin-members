@@ -1,9 +1,10 @@
 import { membersBatchApiClient } from "@/api";
+import { QK_MEMBERS } from "@/api/query-keys";
 import type { Member } from "@/types";
 import { useQuery } from "@tanstack/vue-query";
 import { computed, type Ref } from "vue";
 
-export const QK_MEMBERS = "plugin:members:members";
+export { QK_MEMBERS };
 
 export interface MemberQueryState {
   page: Ref<number>;

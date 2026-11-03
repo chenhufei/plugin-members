@@ -22,6 +22,7 @@ import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.members.Member;
+import run.halo.members.MemberGroup;
 import run.halo.members.finders.impl.MemberFinderImpl;
 
 /**
@@ -41,6 +42,8 @@ class MemberBatchServiceImplTest {
     @BeforeEach
     void stubCreate() {
         when(client.listAll(eq(Member.class), any(ListOptions.class), any()))
+            .thenReturn(Flux.empty());
+        when(client.listAll(eq(MemberGroup.class), any(ListOptions.class), any()))
             .thenReturn(Flux.empty());
         when(client.create(any(Member.class)))
             .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
@@ -289,9 +292,55 @@ class MemberBatchServiceImplTest {
     }
 
     @Test
+    @DisplayName("CSV 里写分组显示名时，入库换成真实资源名")
+    void groupDisplayNameIsResolvedToResourceName() {
+        MemberGroup group = new MemberGroup();
+        Metadata metadata = new Metadata();
+        metadata.setName("alumni");
+        group.setMetadata(metadata);
+        MemberGroup.MemberGroupSpec groupSpec = new MemberGroup.MemberGroupSpec();
+        groupSpec.setDisplayName("校友");
+        group.setSpec(groupSpec);
+        when(client.listAll(eq(MemberGroup.class), any(ListOptions.class), any()))
+            .thenReturn(Flux.just(group));
+
+        // 模板里写的正是显示名，旧实现会原样入库，前台按分组聚合时归入「未分组」
+        var csv = CSV_HEADER + "\n"
+            + "甲同学,甲@test.local,,5001,校友,\n";
+        var result = service.batchImportFromCSV(csv, null).block();
+
+        assertThat(result).isNotNull();
+        assertThat(result.success()).isEqualTo(1);
+        assertThat(captureCreated().get(0).getSpec().getGroupName()).isEqualTo("alumni");
+    }
+
+    @Test
+    @DisplayName("分组名既不是资源名也不是显示名时保留原值，不静默改掉")
+    void unknownGroupIsKeptAsIs() {
+        var csv = CSV_HEADER + "\n"
+            + "甲同学,甲@test.local,,5002,查无此组,\n";
+        var result = service.batchImportFromCSV(csv, null).block();
+
+        assertThat(result).isNotNull();
+        assertThat(result.success()).isEqualTo(1);
+        assertThat(captureCreated().get(0).getSpec().getGroupName()).isEqualTo("查无此组");
+    }
+
+    @Test
+    @DisplayName("默认分组为空串时不写入空字符串分组")
+    void blankDefaultGroupIsIgnored() {
+        var csv = CSV_HEADER + "\n"
+            + "甲同学,甲@test.local,,5003,,\n";
+        var result = service.batchImportFromCSV(csv, "  ").block();
+
+        assertThat(result).isNotNull();
+        assertThat(result.success()).isEqualTo(1);
+        assertThat(captureCreated().get(0).getSpec().getGroupName()).isNull();
+    }
+
+    @Test
     @DisplayName("并发计数不被重复消费破坏")
-    void createCalledOncePerRow() {
-        AtomicInteger counter = new AtomicInteger();
+    void createCalledOncePerRow() {        AtomicInteger counter = new AtomicInteger();
         when(client.create(any(Member.class))).thenAnswer(invocation -> {
             counter.incrementAndGet();
             return Mono.just(invocation.getArgument(0));

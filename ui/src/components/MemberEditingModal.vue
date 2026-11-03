@@ -1,13 +1,13 @@
 <script lang="ts" setup>
 import { membersCoreApiClient } from "@/api";
-import { QK_MEMBER_GROUPS } from "@/composables/use-group-fetch";
-import { QK_MEMBERS } from "@/composables/use-member-fetch";
+import { invalidateMemberViews } from "@/api/query-keys";
 import type { Member, MemberFormState } from "@/types";
 import { Dialog, Toast, VButton, VModal, VSpace } from "@halo-dev/components";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import { useTemplateRef } from "vue";
 import MemberForm from "./MemberForm.vue";
 import { qqAvatar } from "@/utils/qq-link";
+import { errorMessage } from "@/utils/error";
 
 const props = withDefaults(
   defineProps<{
@@ -55,9 +55,11 @@ const { mutate, isPending } = useMutation({
   onSuccess: () => {
     Toast.success("编辑成员成功");
     modal.value?.close();
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] });
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-    queryClient.invalidateQueries({ queryKey: ["member-submits"] });
+    void invalidateMemberViews(queryClient);
+  },
+  onError: (error) => {
+    console.error("Failed to update member", error);
+    Toast.error(errorMessage(error, "保存失败，请检查填写内容"));
   },
 });
 
@@ -71,11 +73,15 @@ function handleDelete() {
     description: "删除之后将无法恢复。",
     confirmType: "danger",
     onConfirm: async () => {
-      await membersCoreApiClient.member.delete(props.member.metadata.name);
-      Toast.success("删除成功");
-      modal.value?.close();
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
-      queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] });
+      try {
+        await membersCoreApiClient.member.delete(props.member.metadata.name);
+        Toast.success("删除成功");
+        modal.value?.close();
+        void invalidateMemberViews(queryClient);
+      } catch (error) {
+        console.error("Failed to delete member", error);
+        Toast.error(errorMessage(error, "删除失败，请稍后重试"));
+      }
     },
   });
 }

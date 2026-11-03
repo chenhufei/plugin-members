@@ -156,6 +156,12 @@ git push gitee HEAD
 ### 4.3 前端（ui / widget）
 
 - `ui/` 组件异常不得被 Dialog 吞掉，批量操作走后端单接口。
+- **查询键只写在 `ui/src/api/query-keys.ts`**：失效是按前缀匹配字符串的，键写错不会报错，只会让 `invalidateQueries` 静默变成 no-op（列表不刷新，且没有任何日志）。变更成员后统一调 `invalidateMemberViews()`，只涉及分组时调 `invalidateMemberGroupViews()`——分组视图的 queryFn 里还取了分组列表，只失效分组键同样刷不动。
+- **接口返回字段以 `ui/src/api/index.ts` 的类型为准**：直接 `axiosInstance.post` 拿 `any` 时，字段名打错（如把 `success` 写成 `succeeded`）编译期发现不了，运行期只表现为「永远是 0」。新接口先补到客户端类型上再调用。
+- **控制台权限**：管不到元素的场景（tab、菜单项这类数据）用 `composables/use-ui-permissions.ts` 的 `can()`；它读 `/users/-` 的角色 `ui-permissions`，不要依赖 `stores.currentUser()`——插件上下文里实测取不到，判断会一直落到「放行」。
+- **每条写操作都要有失败出口**：`useMutation` 必须有 `onError`，`Dialog.warning({ onConfirm })` 里必须 `try/catch`（对话框在 onConfirm 抛错时只会静默关闭，站长会以为操作成功）；提示文案统一走 `utils/error.ts` 的 `errorMessage(error, fallback)`，它按 RFC 7807 取 `detail`/`message`/`title`，**不要把 axios 的英文 `Request failed with status code 400` 直接贴给用户**。失败时不清空已选项，方便重试。
+- **枚举状态要三处同时补齐**：`MemberBadge` 的文案、列表页的 `statusText`/`statusState`、筛选下拉的 `statusOptions`。只补一处的结果是「徽标显示撤回中、列表显示未知、还筛不出来」——状态流转在控制台上断链。
+- **写进 `spec.groupName` 的必须是分组资源名**：可以是显示名让用户选，但落库前要换成 `metadata.name`（参照 `MemberBatchServiceImpl#resolveGroupNames`）。写显示名不会报错，只会在前台按分组聚合时归入「未分组」。
 - 版本跨大版本的依赖升级（如 vue-router 大版本）需单独 PR 并回归路由。
 
 ### 4.4 行尾
@@ -177,8 +183,11 @@ git push gitee HEAD
 1. 未安装 theme-nucma → 插件默认页仍可独立渲染。
 2. 插件停用 → 主题侧成员区块降级，不报错。
 3. 匿名 / 登录 / 管理员 → 只能访问各自授权范围；匿名端点限流生效。
-4. 邮件通知：仅状态变化时发送，普通资料编辑不重复发。
-5. MCP 工具：查询需查看权限、写入需管理权限，`dryRun` 默认 true。
+4. **只读账号**（仅 `role-template-member-view`）实登一次控制台：成员页、申请记录页不出现管理入口，撤回记录 tab 不出现、带 `?tab=withdrawals` 进入能回落到提交记录，全程没有 403 文案。
+5. 邮件通知：仅状态变化时发送，普通资料编辑不重复发。
+6. MCP 工具：查询需查看权限、写入需管理权限，`dryRun` 默认 true。
+
+> 造只读账号：`POST /apis/api.console.halo.run/v1alpha1/users`（**扁平**载荷 `{name, displayName, email, password, roles}`，`spec` 包裹会被拒），再 `POST .../users/{name}/permissions` 设 `{roles:["role-template-member-view"]}`。登录有频率限制，联调时把 SESSION 存下来复用，别反复登录。
 
 ---
 

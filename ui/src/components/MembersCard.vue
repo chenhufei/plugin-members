@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { membersBatchApiClient, membersCoreApiClient } from "@/api";
-import { QK_MEMBER_GROUPS, useMemberGroupFetch } from "@/composables/use-group-fetch";
-import { QK_MEMBERS } from "@/composables/use-member-fetch";
+import { invalidateMemberViews } from "@/api/query-keys";
+import { useMemberGroupFetch } from "@/composables/use-group-fetch";
 import type { GroupWithMembers } from "@/utils/group-members";
 import type { Member, MemberGroup } from "@/types";
 import {
@@ -86,7 +86,7 @@ function handleDeleteInBatch() {
         } else {
           Toast.success(`已删除 ${data.success} 位成员`);
         }
-        queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
+        void invalidateMemberViews(queryClient);
         enabledSelect.value = false;
         selectedMemberNames.value.length = 0;
       } catch (error: any) {
@@ -112,8 +112,7 @@ function handleMoveToGroup(targetGroup: MemberGroup) {
         } else {
           Toast.success(`已移动 ${data.success} 位成员`);
         }
-        queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] });
-        queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
+        void invalidateMemberViews(queryClient);
         enabledSelect.value = false;
         selectedMemberNames.value.length = 0;
       } catch (error: any) {
@@ -144,8 +143,7 @@ function handleDeleteGroup({ deleteMembers }: { deleteMembers: boolean }) {
         }
         await membersCoreApiClient.memberGroup.delete(group.value.metadata.name);
         Toast.success("删除成功");
-        queryClient.invalidateQueries({ queryKey: [QK_MEMBER_GROUPS] });
-        queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] });
+        void invalidateMemberViews(queryClient);
       } catch (error: any) {
         Toast.error(error.response?.data?.message || error.message || "删除失败");
       }

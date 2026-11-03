@@ -4,10 +4,11 @@ import ListFilterSelect from "@/components/ListFilterSelect.vue";
 import MemberEditingModal from "@/components/MemberEditingModal.vue";
 import MemberReviewReasonModal from "@/components/MemberReviewReasonModal.vue";
 import { useMemberGroupFetch } from "@/composables/use-group-fetch";
-import { QK_MEMBERS } from "@/composables/use-member-fetch";
+import { invalidateMemberViews, QK_MEMBER_SUBMITS } from "@/api/query-keys";
 import type { Member } from "@/types";
 import { downloadCsv } from "@/utils/csv";
 import { formatDatetime } from "@/utils/date";
+import { errorMessage } from "@/utils/error";
 import {
   Dialog,
   IconRefreshLine,
@@ -54,6 +55,8 @@ const statusOptions = [
   { label: "待审核", value: "PENDING" },
   { label: "已通过", value: "APPROVED" },
   { label: "已拒绝/下架", value: "REJECTED" },
+  // 成员在成员中心申请撤回后进入这个状态，等待管理员在「撤回记录」里处理
+  { label: "撤回中", value: "WITHDRAW_REQUESTED" },
 ];
 
 const { groups } = useMemberGroupFetch();
@@ -99,7 +102,7 @@ const {
   isFetching,
   refetch,
 } = useQuery({
-  queryKey: ["member-submits", page, size, selectedStatus, selectedGroup, keyword, selectedSort],
+  queryKey: [QK_MEMBER_SUBMITS, page, size, selectedStatus, selectedGroup, keyword, selectedSort],
   queryFn: async () => {
     const { data } = await membersBatchApiClient.member.list({
       page: page.value,
@@ -136,11 +139,14 @@ function statusText(member: Member) {
   const action = member.metadata.annotations?.["member.plugin.halo.run/review-action"];
   if (member.spec.status === "REJECTED" && action === "OFFLINE") return "已下架";
   if (member.spec.status === "REJECTED" && action === "WITHDRAW") return "已撤回";
+  // 缺 WITHDRAW_REQUESTED 时这里会落到「未知」，而筛选里也没有这个选项，
+  // 于是「成员申请了撤回」在控制台既看不出来也筛不出来，状态流转断链。
   return {
     PENDING: "待审核",
     APPROVED: "已通过",
     REJECTED: "已拒绝",
-  }[member.spec.status] || "未知";
+    WITHDRAW_REQUESTED: "撤回中",
+  }[member.spec.status] || member.spec.status || "未知";
 }
 
 function statusState(status: string) {
@@ -148,6 +154,7 @@ function statusState(status: string) {
     PENDING: "warning",
     APPROVED: "success",
     REJECTED: "error",
+    WITHDRAW_REQUESTED: "warning",
   } as Record<string, "warning" | "success" | "error" | "default">)[status] || "default";
 }
 
@@ -172,11 +179,7 @@ function exportCurrentPage() {
 }
 
 async function invalidateMemberQueries() {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["member-submits"] }),
-    queryClient.invalidateQueries({ queryKey: [QK_MEMBERS] }),
-    queryClient.invalidateQueries({ queryKey: ["plugin:members:withdraw-requests"] }),
-  ]);
+  await invalidateMemberViews(queryClient);
 }
 
 async function approve(member: Member) {
@@ -198,7 +201,7 @@ async function approve(member: Member) {
     await invalidateMemberQueries();
   } catch (error) {
     console.error("Failed to approve member", error);
-    Toast.error("操作失败");
+    Toast.error(errorMessage(error, "操作失败"));
   }
 }
 
@@ -219,11 +222,17 @@ function approveInBatch() {
     description: `将通过 ${selectedMembers.value.length} 个成员申请。`,
     confirmType: "secondary",
     onConfirm: async () => {
-      const { data } = await membersBatchApiClient.member.batchApprove([...selectedMembers.value], true);
-      data.failed ? Toast.warning(data.message) : Toast.success("批量通过完成");
-      selectedMembers.value = [];
-      checkedAll.value = false;
-      await invalidateMemberQueries();
+      // 对话框的 onConfirm 抛错时只会静默关闭，站长看不到任何反馈
+      try {
+        const { data } = await membersBatchApiClient.member.batchApprove([...selectedMembers.value], true);
+        data.failed ? Toast.warning(data.message) : Toast.success("批量通过完成");
+        selectedMembers.value = [];
+        checkedAll.value = false;
+        await invalidateMemberQueries();
+      } catch (error) {
+        console.error("Failed to approve members in batch", error);
+        Toast.error(errorMessage(error, "批量通过失败，请稍后重试"));
+      }
     },
   });
 }
@@ -234,11 +243,16 @@ function deleteInBatch() {
     description: "删除后无法恢复。拒绝或下架请使用卡片上的对应按钮，以便填写并发送原因。",
     confirmType: "danger",
     onConfirm: async () => {
-      const { data } = await membersBatchApiClient.member.batchDelete([...selectedMembers.value]);
-      data.failed ? Toast.warning(data.message) : Toast.success("删除完成");
-      selectedMembers.value = [];
-      checkedAll.value = false;
-      await invalidateMemberQueries();
+      try {
+        const { data } = await membersBatchApiClient.member.batchDelete([...selectedMembers.value]);
+        data.failed ? Toast.warning(data.message) : Toast.success("删除完成");
+        selectedMembers.value = [];
+        checkedAll.value = false;
+        await invalidateMemberQueries();
+      } catch (error) {
+        console.error("Failed to delete members in batch", error);
+        Toast.error(errorMessage(error, "批量删除失败，请稍后重试"));
+      }
     },
   });
 }
@@ -249,9 +263,14 @@ function deleteMember(member: Member) {
     description: "此操作不可恢复。",
     confirmType: "danger",
     onConfirm: async () => {
-      await membersCoreApiClient.member.delete(member.metadata.name);
-      Toast.success("删除成功");
-      await invalidateMemberQueries();
+      try {
+        await membersCoreApiClient.member.delete(member.metadata.name);
+        Toast.success("删除成功");
+        await invalidateMemberQueries();
+      } catch (error) {
+        console.error("Failed to delete member", error);
+        Toast.error(errorMessage(error, "删除失败，请稍后重试"));
+      }
     },
   });
 }

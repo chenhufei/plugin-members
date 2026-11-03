@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import {
+  Dialog,
   IconLink,
   IconRefreshLine,
   VButton,
@@ -11,6 +12,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
 import { axiosInstance } from "@halo-dev/api-client";
+import { errorMessage } from "@/utils/error";
 
 const CLAIM_API_BASE = "/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers";
 
@@ -99,6 +101,35 @@ const invalidateMutation = useMutation({
   },
 });
 
+/**
+ * 批量作废。后端只有单条 DELETE，这里并发下发再用 allSettled 汇总：
+ * 一条失败不该把已经作废成功的链接重新变回有效，也不该让其余请求中止。
+ */
+const batchInvalidateMutation = useMutation({
+  mutationFn: async (memberNames: string[]) => {
+    const results = await Promise.allSettled(
+      memberNames.map((memberName) => axiosInstance.delete(`${CLAIM_API_BASE}/claims/${memberName}`))
+    );
+    return {
+      total: results.length,
+      failed: results.filter((result) => result.status === "rejected").length,
+    };
+  },
+  onSuccess: ({ total, failed }) => {
+    if (failed > 0) {
+      Toast.warning(`已作废 ${total - failed} 个认领链接，${failed} 个失败，请刷新后重试`);
+    } else {
+      Toast.success(`已作废 ${total} 个认领链接`);
+    }
+    selectedClaims.value = [];
+    queryClient.invalidateQueries({ queryKey: ["plugin:members:claims"] });
+    queryClient.invalidateQueries({ queryKey: ["plugin:members:incomplete"] });
+  },
+  onError: (error: any) => {
+    Toast.error(errorMessage(error, "批量作废失败"));
+  },
+});
+
 const distributeMutation = useMutation({
   mutationFn: async (memberNames: string[]) => {
     const { data } = await axiosInstance.post(`${CLAIM_API_BASE}/claims/distribute`, { memberNames });
@@ -148,6 +179,27 @@ const handleInvalidate = (memberName: string) => {
   if (confirm("确定要作废该认领链接吗？")) {
     invalidateMutation.mutate(memberName);
   }
+};
+
+const handleBatchInvalidate = () => {
+  if (selectedClaims.value.length === 0) {
+    Toast.warning("请先选择要作废的认领链接");
+    return;
+  }
+  const count = selectedClaims.value.length;
+  Dialog.warning({
+    title: `作废选中的 ${count} 个认领链接？`,
+    description: "作废后成员手里的旧链接立即失效，需要重新生成才能认领。",
+    confirmType: "danger",
+    // 返回 Promise，对话框会一直显示加载态直到请求结束；失败已由 onError 提示
+    onConfirm: async () => {
+      try {
+        await batchInvalidateMutation.mutateAsync([...selectedClaims.value]);
+      } catch {
+        // onError 已提示，别把拒绝再抛回对话框
+      }
+    },
+  });
 };
 
 const copyLink = (claim: ClaimToken) => {
@@ -296,6 +348,15 @@ const groupLabel = (item: { groupName?: string; groupDisplayName?: string }) =>
             <span class="text-sm text-gray-500 ml-2">({{ claims.length }})</span>
           </h3>
           <div class="flex items-center gap-3">
+            <VButton
+              v-if="selectedClaims.length > 0"
+              size="xs"
+              type="danger"
+              :loading="batchInvalidateMutation.isPending.value"
+              @click="handleBatchInvalidate"
+            >
+              作废选中 ({{ selectedClaims.length }})
+            </VButton>
             <label class="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
