@@ -762,6 +762,29 @@ class MemberMcpToolProviderTest {
     }
 
     @Test
+    @DisplayName("数据巡检按分组资源名归属时不得误报分组缺失")
+    void auditTreatsGroupResourceNameAsValidGroup() {
+        grantRoles("super-role");
+        // 线上真实形态：成员的 groupName 存的是分组资源名，不是显示名
+        var byResourceName = member("g1", "G", "g@example.com", Instant.parse("2026-03-01T00:00:00Z"));
+        byResourceName.getSpec().setQq("67891");
+        byResourceName.getSpec().setSchool("重庆市大足一中");
+        byResourceName.getSpec().setQqFriendLink("https://qm.qq.com/q/abc");
+        byResourceName.getSpec().setGroupName("member-group-buuuwxaw");
+        byResourceName.getSpec().setAvatar(AvatarUtils.defaultQqAvatar("67891"));
+        stubMembers(List.of(byResourceName));
+        when(memberFinder.listAllGroups())
+            .thenReturn(Flux.just(existingGroup("member-group-buuuwxaw", "重庆地区")));
+
+        var result = execute("audit_member_data", Map.of("checks", List.of("group")), true);
+
+        assertThat(result.error()).isFalse();
+        assertThat(result.structuredContent())
+            .containsEntry("issueTotal", 0L)
+            .containsEntry("healthy", true);
+    }
+
+    @Test
     @DisplayName("数据巡检拒绝未知检查项")
     void auditRejectsUnknownCheck() {
         grantRoles("super-role");

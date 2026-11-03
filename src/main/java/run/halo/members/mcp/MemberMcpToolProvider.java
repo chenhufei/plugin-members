@@ -2017,7 +2017,7 @@ public class MemberMcpToolProvider implements McpToolProvider {
 
     private McpToolResult auditResult(List<Member> members, List<MemberGroupVo> groups,
         List<String> checks, int limit) {
-        var groupNames = groupDisplayNames(groups);
+        var groupNames = groupIdentifiers(groups);
         var reports = new ArrayList<Map<String, Object>>();
         long issueTotal = 0;
         for (var check : checks) {
@@ -2038,11 +2038,27 @@ public class MemberMcpToolProvider implements McpToolProvider {
                     + " check(s)");
     }
 
-    private static Set<String> groupDisplayNames(List<MemberGroupVo> groups) {
+    /**
+     * 分组的可识别标识集合。
+     *
+     * <p>成员的 {@code groupName} 存的是分组**资源名**（如 {@code member-group-xxxx}），
+     * 但老数据里也可能残留显示名（如「高校联盟」），导入时两者都会做双向解析。
+     * 因此这里同时收集资源名与显示名，避免把「分组存在但存法不同」误报成分组缺失。
+     */
+    private static Set<String> groupIdentifiers(List<MemberGroupVo> groups) {
         return groups.stream()
-            .map(MemberGroupVo::getSpec)
-            .filter(spec -> spec != null && spec.getDisplayName() != null)
-            .map(spec -> spec.getDisplayName().trim())
+            .filter(group -> group != null && group.getMetadata() != null
+                && group.getMetadata().getName() != null)
+            .flatMap(group -> {
+                var identifiers = new ArrayList<String>();
+                identifiers.add(group.getMetadata().getName());
+                if (group.getSpec() != null && group.getSpec().getDisplayName() != null) {
+                    identifiers.add(group.getSpec().getDisplayName());
+                }
+                return identifiers.stream();
+            })
+            .map(String::trim)
+            .filter(identifier -> !identifier.isEmpty())
             .collect(Collectors.toSet());
     }
 
@@ -2063,7 +2079,7 @@ public class MemberMcpToolProvider implements McpToolProvider {
      */
     private List<Map<String, Object>> auditCounts(List<Member> members,
         List<MemberGroupVo> groups) {
-        var groupNames = groupDisplayNames(groups);
+        var groupNames = groupIdentifiers(groups);
         var summaries = new ArrayList<Map<String, Object>>();
         for (var check : AUDIT_CHECKS) {
             var report = runAudit(check, members, groupNames, 0);
