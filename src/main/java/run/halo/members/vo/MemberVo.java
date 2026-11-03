@@ -10,6 +10,8 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import run.halo.app.extension.MetadataOperator;
 import run.halo.members.Member;
+import run.halo.members.utils.AvatarUtils;
+import run.halo.members.utils.EmailUtils;
 
 /**
  * 成员视图对象
@@ -35,12 +37,45 @@ public class MemberVo {
      */
     private Instant joinedAtTs;
 
+    /**
+     * 生效邮箱：登记了用自己的，没登记时由 QQ 号推导（{@code <QQ号>@qq.com}）。
+     *
+     * <p>本插件的约定是成员只登记 QQ 号，邮箱本来就从 QQ 号派生。所以对外提供
+     * 「这个成员的邮箱是什么」时应当直接给这个值，而不是给 null 再让调用方自己猜
+     * 是不是要走 QQ 邮箱。既没邮箱也没有有效 QQ 号时为空字符串。
+     *
+     * <p>匿名可读的视图（{@code MemberPublicEndpoint.toPublicView}）会重新构造
+     * MemberVo，不会带上这个字段，公开接口不受影响。
+     */
+    private String email;
+
+    /**
+     * 生效头像：登记了用自己的，没登记时用 QQ 头像（{@code q1.qlogo.cn}）。
+     * 同上，公开视图不会带出去。
+     */
+    private String avatar;
+
     public static MemberVo from(Member member) {
+        var spec = member.getSpec();
         return MemberVo.builder()
             .metadata(member.getMetadata())
-            .spec(member.getSpec())
+            .spec(spec)
             .joinedAtTs(resolveJoinedAt(member))
+            .email(spec == null ? "" : EmailUtils.resolveEmail(spec.getEmail(), spec.getQq()))
+            .avatar(resolveAvatar(spec))
             .build();
+    }
+
+    private static String resolveAvatar(Member.MemberSpec spec) {
+        if (spec == null) {
+            return "";
+        }
+        var avatar = spec.getAvatar();
+        if (avatar != null && !avatar.isBlank()) {
+            return avatar;
+        }
+        var qqAvatar = AvatarUtils.defaultQqAvatar(spec.getQq());
+        return qqAvatar == null ? "" : qqAvatar;
     }
 
     private static Instant resolveJoinedAt(Member member) {

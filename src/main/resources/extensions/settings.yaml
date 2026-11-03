@@ -16,11 +16,12 @@ spec:
           help: 新成员申请提交后直接通过，适合无需人工审核的站点
           value: false
         - $formkit: number
+          if: $get(autoApprove).value === false
           name: pendingCapacity
           id: pendingCapacity
           key: pendingCapacity
           label: 待审核申请容量
-          help: 未开启自动通过时，限制同时处于待审核状态的成员申请数量
+          help: 限制同时处于待审核状态的成员申请数量。仅在关闭「自动通过申请」时生效，所以开启自动通过后本项会隐藏
           value: 100
           step: 1
           validation: required|number|min:1|matches:/^[1-9][0-9]*$/
@@ -81,7 +82,7 @@ spec:
           name: claimVerifyMode
           key: claimVerifyMode
           label: 认领验证方式
-          help: 成员自助认领时使用的验证方式。邮箱验证码只发往该成员的 QQ 邮箱（QQ号@qq.com），不接受自定义邮箱；建议至少保留一种验证，全部关闭会降低防滥用能力。
+          help: 成员自助认领时使用的验证方式，三者选其一。邮箱验证码只发往该成员的 QQ 邮箱（QQ号@qq.com），不接受自定义邮箱；选「关闭验证」会显著降低防滥用能力。
           options:
             - label: 图形验证码
               value: captcha

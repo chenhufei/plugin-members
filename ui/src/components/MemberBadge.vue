@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { Member } from "@/types";
 import { computed } from "vue";
+import { resolveMemberAvatar } from "@/utils/member-contact";
 
 const props = defineProps<{
   selectMode?: boolean;
@@ -26,7 +27,8 @@ function handleKeydown() {
 const displayName = computed(() => props.member.spec?.displayName || props.member.metadata.name);
 const school = computed(() => props.member.spec?.school || "未填写学校");
 const qq = computed(() => props.member.spec?.qq || "");
-const avatar = computed(() => props.member.spec?.avatar || "");
+// 头像统一走「生效头像」：成员只登记 QQ 号时，QQ 头像就是他的头像，不该显示占位符
+const avatar = computed(() => resolveMemberAvatar(props.member.spec));
 const background = computed(() => props.member.spec?.background || "");
 const status = computed(() => props.member.spec?.status || "PENDING");
 const reviewAction = computed(

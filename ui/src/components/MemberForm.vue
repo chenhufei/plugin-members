@@ -2,8 +2,9 @@
 import { useMemberGroupFetch } from "@/composables/use-group-fetch";
 import type { MemberFormState } from "@/types";
 import { Toast, VButton } from "@halo-dev/components";
-import { nextTick, onMounted, ref, shallowRef, toRaw, useTemplateRef } from "vue";
+import { computed, nextTick, onMounted, ref, shallowRef, toRaw, useTemplateRef } from "vue";
 import { decodeQrFromImage, normalizeQqLink } from "@/utils/qq-link";
+import { resolveMemberAvatar } from "@/utils/member-contact";
 
 const props = withDefaults(defineProps<{
   name?: string;
@@ -34,6 +35,9 @@ const data = ref<MemberFormState>({
 
 const qrCodeProcessing = shallowRef(false);
 const qrInput = useTemplateRef<HTMLInputElement>("qrInput");
+
+// 头像就是 QQ 号派生出来的那张图，表单里直接显示出来，避免让人以为「头像还没设置」
+const avatarPreview = computed(() => resolveMemberAvatar({ qq: data.value.qq }));
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
@@ -152,11 +156,20 @@ async function onSubmit() {
           </VButton>
         </div>
 
-        <FormKit type="email" name="email" v-model="data.email" label="邮箱" help="用于审核通知" />
+        <FormKit type="email" name="email" v-model="data.email" label="邮箱" help="用于审核通知。留空则使用 QQ 邮箱（QQ号@qq.com），不必重复填写" />
         <div class=":uno: py-2">
           <div class=":uno: text-sm text-gray-900">头像</div>
-          <div class=":uno: mt-1 text-xs text-gray-500">
-            统一使用 QQ 头像（<span class=":uno: font-mono">{{ data.qq || "QQ号" }}</span> 的 QQ 头像），不支持自定义上传
+          <div class=":uno: mt-1 flex items-center gap-3">
+            <img
+              v-if="avatarPreview"
+              :src="avatarPreview"
+              alt="QQ 头像"
+              class=":uno: h-12 w-12 rounded-full object-cover ring-1 ring-gray-200"
+            />
+            <div class=":uno: text-xs text-gray-500">
+              由 QQ 号自动生成：
+              <span class=":uno: font-mono">{{ avatarPreview ? `${data.qq} → QQ 头像` : "填写 QQ 号后显示" }}</span>
+            </div>
           </div>
         </div>
         <FormKit type="attachment" name="background" v-model="data.background" label="背景图" help="成员卡片背景图片" />

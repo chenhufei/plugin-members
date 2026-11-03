@@ -35,7 +35,6 @@ interface IncompleteMember {
   qq: string;
   school: string;
   hasEmail: boolean;
-  emailSource?: "MEMBER" | "QQ" | "NONE";
   targetEmail?: string;
   groupName?: string;
   groupDisplayName?: string;
@@ -170,7 +169,7 @@ const handleDistributeSelected = () => {
     Toast.warning("请先选择要分发认领链接的成员");
     return;
   }
-  if (!confirm(`确定要向 ${selectedIncomplete.value.length} 位成员发送认领链接邮件吗？邮件只会发送到成员登记的邮箱，未登记邮箱的成员会被跳过并在结果中列出。`)) {
+  if (!confirm(`确定要向 ${selectedIncomplete.value.length} 位成员发送认领链接邮件吗？邮件发送到成员可用的邮箱（登记邮箱或 QQ 号派生的 QQ 邮箱）；既无邮箱也无 QQ 号的成员会被跳过并在结果中列出。`)) {
     return;
   }
   distributeMutation.mutate(selectedIncomplete.value);
@@ -309,6 +308,7 @@ const groupLabel = (item: { groupName?: string; groupDisplayName?: string }) =>
             <th class="px-4 py-3 text-left w-8"></th>
             <th class="px-4 py-3 text-left">成员</th>
             <th class="px-4 py-3 text-left">QQ</th>
+            <th class="px-4 py-3 text-left">邮箱</th>
             <th class="px-4 py-3 text-left">学校</th>
             <th class="px-4 py-3 text-left">分组</th>
           </tr>
@@ -325,14 +325,12 @@ const groupLabel = (item: { groupName?: string; groupDisplayName?: string }) =>
             <td class="px-4 py-3">
               <div class="font-medium">{{ member.displayName }}</div>
               <div class="text-xs text-gray-500">{{ member.memberName }}</div>
-              <div v-if="member.emailSource === 'QQ'" class="text-xs text-amber-600">
-                未登记邮箱，将自动发送到 QQ 邮箱 {{ member.targetEmail }}
-              </div>
-              <div v-else-if="member.emailSource === 'NONE'" class="text-xs text-red-600">
-                无可用邮箱，邮件分发会被跳过
-              </div>
             </td>
             <td class="px-4 py-3 text-sm">{{ member.qq || "-" }}</td>
+            <td class="px-4 py-3 text-sm font-mono">
+              <span v-if="member.targetEmail">{{ member.targetEmail }}</span>
+              <span v-else class="text-red-600">无可用邮箱</span>
+            </td>
             <td class="px-4 py-3 text-sm">{{ member.school || "-" }}</td>
             <td class="px-4 py-3 text-sm">{{ groupLabel(member) }}</td>
           </tr>

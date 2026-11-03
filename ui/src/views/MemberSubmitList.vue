@@ -9,6 +9,7 @@ import type { Member } from "@/types";
 import { downloadCsv } from "@/utils/csv";
 import { formatDatetime } from "@/utils/date";
 import { errorMessage } from "@/utils/error";
+import { resolveMemberAvatar, resolveMemberEmail } from "@/utils/member-contact";
 import {
   Dialog,
   IconRefreshLine,
@@ -176,7 +177,7 @@ function exportCurrentPage() {
     members.value.map((member) => [
       member.spec.displayName,
       member.spec.school,
-      member.spec.email,
+      resolveMemberEmail(member.spec),
       member.spec.qq,
       getGroupName(member.spec.groupName || ""),
       statusText(member),
@@ -373,12 +374,12 @@ function deleteMember(member: Member) {
         <template #start>
           <VEntityField class=":uno: w-14 min-w-14">
             <template #description>
-              <VAvatar :alt="member.spec.displayName" :src="member.spec.avatar" size="md" />
+              <VAvatar :alt="member.spec.displayName" :src="resolveMemberAvatar(member.spec)" size="md" />
             </template>
           </VEntityField>
           <VEntityField
             :title="member.spec.displayName"
-            :description="[member.spec.school || member.spec.email || '未填写学校', member.spec.origin === 'FORM' ? '前台提交' : member.spec.origin === 'CONSOLE' ? '后台创建' : '历史记录'].join(' · ')"
+            :description="[member.spec.school || resolveMemberEmail(member.spec) || '未填写学校', member.spec.origin === 'FORM' ? '前台提交' : member.spec.origin === 'CONSOLE' ? '后台创建' : '历史记录'].join(' · ')"
             class=":uno: min-w-0 max-w-[32rem] cursor-pointer"
             @click="editingMember = member"
           />

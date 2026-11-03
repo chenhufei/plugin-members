@@ -16,6 +16,7 @@ import {
 } from "@halo-dev/components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
+import { resolveMemberAvatar, resolveMemberEmail } from "@/utils/member-contact";
 import { approveWithdraw, getWithdrawRequests, rejectWithdraw } from "@/api";
 import { invalidateMemberViews, QK_WITHDRAW_REQUESTS } from "@/api/query-keys";
 import { useUiPermissions } from "@/composables/use-ui-permissions";
@@ -169,12 +170,12 @@ function recordStatus(record: WithdrawRecord) {
         <template #start>
           <VEntityField>
             <template #description>
-              <VAvatar :alt="record.spec.displayName" :src="record.spec.avatar" size="md" />
+              <VAvatar :alt="record.spec.displayName" :src="resolveMemberAvatar(record.spec)" size="md" />
             </template>
           </VEntityField>
           <VEntityField
             :title="record.spec.displayName"
-            :description="record.email || record.spec.email || (record.spec.qq ? `QQ ${record.spec.qq}` : '未填写联系方式')"
+            :description="resolveMemberEmail(record.spec) || record.email || '未填写联系方式'"
             class=":uno: min-w-0 max-w-[28rem]"
           />
         </template>
