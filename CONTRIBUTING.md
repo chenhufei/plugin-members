@@ -140,6 +140,7 @@ git push gitee HEAD
 - 事件循环内不做 DNS、阻塞 IO、`.block()`、全表排序；需要阻塞段时整体 `Mono.fromCallable(...).subscribeOn(boundedElastic)`，并加超时。
 - Extension / Reconciler 注意生命周期，任务与监听器要能清理；Reconciler 内的响应式调用统一 `block(5s)` + 降级。
 - 公开 API 返回 RFC 7807 错误；匿名角色只开必要能力并加限流；成员敏感字段（email 等）不得从匿名端点外泄。
+- **匿名端点不得接受任意 URL**。需要替前端转发外部资源时（如 `plugins/PluginMembers/avatar` 代理 QQ 头像），必须：协议/主机/路径三重白名单、禁止跳转、限制体积与超时、结果做局部缓存；白名单逻辑放 `utils/` 下单独类并配单测，端点只负责取字节与响应头。
 - 判重、筛选优先下推索引（`ListOptions` + `equal(...)`），不要全表 `listAll` 后内存过滤；索引重建期查询失败要回退全表。
 - 缓存只缓存不可变副本，写入方负责失效；失效要按 key 精确清，不要全 pattern 扫。
 

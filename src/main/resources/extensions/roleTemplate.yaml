@@ -117,6 +117,11 @@ rules:
     resources: [ "plugins/members" ]
     resourceNames: [ "PluginMembers" ]
     verbs: [ "get", "list" ]
+  # 工作证分享图要的是可绘制字节：QQ 头像 CDN 没有 CORS 头，画布只能改走同源代理。
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/avatar" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "get" ]
   - apiGroups: [ "api.plugin.halo.run" ]
     resources: [ "plugins/membersubmits" ]
     resourceNames: [ "PluginMembers" ]

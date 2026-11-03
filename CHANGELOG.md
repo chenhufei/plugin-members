@@ -4,6 +4,21 @@
 
 ---
 
+## [0.0.3] - 2026-11-03
+
+### 新增
+
+- 头像代理接口 `GET /apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/avatar?url=`（匿名可读）：成员页「保存工作证」要把头像画进画布再导出 PNG，而 QQ 头像 CDN 不返回 CORS 头，`<img>` 能显示、`fetch` 与画布绘制都会被拒绝，导出图上的头像位置只剩占位字母。该接口把头像以同源地址取回，前端即可直接绘制。
+  - 地址走白名单：仅 `q1/q2/q3/q.qlogo.cn` 与 `thirdqq.qlogo.cn` 的 `/g`、`/headimg_dl` 两个路径，强制 https、不带端口与 userinfo，不跟随跳转，避免匿名接口被当成 SSRF 跳板。
+  - 体积上限 3 MB、连接 3s / 请求 5s 超时，边读边限长；结果按地址缓存 30 分钟（上限 256 条），响应带 `Cache-Control: public, max-age=86400`。
+  - 匿名角色新增 `plugins/avatar` 的读权限。
+
+### 升级提示
+
+- 主题需 0.0.4+ 才会把工作证头像改走该接口；旧版本主题、旧版本插件仍按原逻辑退回字形占位。
+
+---
+
 ## [0.0.2] - 2026-11-02
 
 ### Security
