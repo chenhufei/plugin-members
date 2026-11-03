@@ -111,6 +111,15 @@ git switch -c feat/members-batch-load
 
 `-x test` 只允许在测试已单独通过后用于打包，**不能替代测试**。产物：`build/libs/plugin-members-<ver>.jar`。
 
+**装到本地 Halo 验证时不能直接替换 jar**：把新 jar 丢进 `data/plugins/` 后 pf4j 不会加载（插件仿佛消失、端点 404）。必须走控制台接口：
+
+```bash
+POST /apis/api.console.halo.run/v1alpha1/plugins/PluginMembers/upgrade   # 先停用 → upgrade → 启用
+```
+
+`.local-halo/upgrade-members-003.mjs` 是现成脚本（复用 `halo-qa-clean.mjs` 的登录）。装完核对 `spec.version` 与 `status.phase=STARTED`。
+
+
 ### 第 6 步：提交与 PR
 
 提交格式见第 6 节，然后：
