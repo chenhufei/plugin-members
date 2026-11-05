@@ -4,6 +4,7 @@ import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -19,6 +20,7 @@ import run.halo.app.extension.Metadata;
 import run.halo.app.extension.MetadataOperator;
 import run.halo.app.plugin.ApiVersion;
 import run.halo.members.Member;
+import run.halo.members.exception.ProblemResponses;
 import run.halo.members.finders.MemberFinder;
 import run.halo.members.vo.MemberGroupVo;
 import run.halo.members.vo.MemberVo;
@@ -74,18 +76,15 @@ public class MemberPublicEndpoint implements CustomEndpoint {
             // 匿名接口必须给出保守的默认值：不传 size 时不能一路透传到「全量返回」
             size = queryInt(request, "size", 50, 1, 100);
         } catch (IllegalArgumentException e) {
-            return ServerResponse.badRequest()
-                .bodyValue(new ErrorResponse(e.getMessage()));
+            return invalidQuery(e.getMessage());
         }
         return memberFinder.listApprovedMemberList(page, size)
             .doOnSuccess(result -> log.debug("返回公开成员列表，共 {} 个成员", result.getTotal()))
             .map(MemberPublicEndpoint::toPublicView)
             .flatMap(result -> ServerResponse.ok().bodyValue(result))
             .doOnError(error -> log.error("获取成员列表失败", error))
-            .onErrorResume(error ->
-                ServerResponse.status(500)
-                    .bodyValue(new ErrorResponse("获取成员列表失败，请稍后重试"))
-            );
+            .onErrorResume(error -> ProblemResponses.problem(HttpStatus.INTERNAL_SERVER_ERROR,
+                "member-list-unavailable", "成员列表获取失败", "成员列表获取失败，请稍后重试"));
     }
 
     /**
@@ -106,10 +105,16 @@ public class MemberPublicEndpoint implements CustomEndpoint {
                 return ServerResponse.ok().bodyValue(groups);
             })
             .doOnError(error -> log.error("获取分组列表失败", error))
-            .onErrorResume(error ->
-                ServerResponse.status(500)
-                    .bodyValue(new ErrorResponse("获取分组列表失败，请稍后重试"))
-            );
+            .onErrorResume(error -> ProblemResponses.problem(HttpStatus.INTERNAL_SERVER_ERROR,
+                "member-group-list-unavailable", "分组列表获取失败", "分组列表获取失败，请稍后重试"));
+    }
+
+    /**
+     * 匿名查询参数不合法：{@code page}/{@code size} 越界或非数字。
+     */
+    private static Mono<ServerResponse> invalidQuery(String detail) {
+        return ProblemResponses.problem(HttpStatus.BAD_REQUEST, "invalid-member-public-query",
+            "查询参数无效", detail);
     }
 
     private Integer queryInt(ServerRequest request, String name, Integer defaultValue,
@@ -136,11 +141,6 @@ public class MemberPublicEndpoint implements CustomEndpoint {
             throw new IllegalArgumentException(name + " 参数必须是数字");
         }
     }
-
-    /**
-     * 错误响应
-     */
-    public record ErrorResponse(String message) {}
 
     /**
      * 匿名可读的成员视图：只保留公开展示字段，去掉邮箱、QQ 号、审核状态与内部标注。

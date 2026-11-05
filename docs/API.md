@@ -9,11 +9,13 @@
 | 分组 | 基础路径 | 认证 | 说明 |
 |------|----------|------|------|
 | 管理资源 | `/apis/member.plugin.halo.run/v1alpha1` | 需要 | Halo 扩展资源 CRUD（成员、分组） |
-| 控制台与匿名业务 | `/apis/api.member.plugin.halo.run/v1alpha1` | 混合 | 列表查询、批量操作、统计；其中 `membergroups`、`membersubmits/*` 为匿名可用 |
+| 控制台与匿名业务 | `/apis/api.member.plugin.halo.run/v1alpha1` | 混合 | 列表查询、批量操作、统计、认领管理；其中 `membergroups`、`membersubmits/*` 为匿名可用 |
 | 公开只读 | `/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers` | 不需要 | 前台主题与第三方页面使用 |
 | 撤回审核 | `/apis/console.api.member.plugin.halo.run/v1alpha1/members` | 需要 | 后台处理成员撤回申请 |
 
 匿名可用能力由插件自带的角色模板 `role-template-member-anonymous-public` 聚合到 `anonymous` 角色，只开放必要资源，不开放任何写管理数据的权限。
+
+⚠️ **`api.plugin.halo.run` 分组对匿名是"读全开"的**：Halo 核心 `role-template-public-apis` 给该分组授了通配 `resources: ["*"]` + `verbs: ["get","list"]`，插件自己的规则压不住。凡是含敏感数据的 **GET** 端点都不能放这个分组——0.0.8 把认领管理整体搬走就是因为这个（详见下文「认领管理 API」）。POST / DELETE 不受该通配影响，但仍需角色模板逐条授权。
 
 ## 数据模型
 
@@ -305,6 +307,24 @@ GET /apis/api.member.plugin.halo.run/v1alpha1/members/-/statistics/overall
 - `GET .../members/-/statistics/by-school`（按数量取前 10）
 - `GET .../members/-/statistics/trend?days=30`：`days` 缺省 `30`，允许 `1` 到 `365`，非法值返回 `400`
 
+## 认领管理 API
+
+认领令牌等同于成员身份凭证，这一组接口**只在 `api.member.plugin.halo.run` 分组**，需要成员管理权限（`members/claims`、`members/incomplete`、`members/claims-generate`、`members/claims-distribute`、`members/claim`）。
+
+```http
+GET    /apis/api.member.plugin.halo.run/v1alpha1/members/-/claims
+GET    /apis/api.member.plugin.halo.run/v1alpha1/members/-/incomplete
+POST   /apis/api.member.plugin.halo.run/v1alpha1/members/-/claims-generate
+POST   /apis/api.member.plugin.halo.run/v1alpha1/members/-/claims-distribute
+DELETE /apis/api.member.plugin.halo.run/v1alpha1/members/{memberName}/claim
+```
+
+- `claims` 返回 `{items: [{memberName, displayName, qq, token, claimUrl, expiresAt, expired, groupName, groupDisplayName}]}`；`incomplete` 返回缺 QQ 好友链接的成员（含收件邮箱掩码与来源）。
+- `claims-generate` / `claims-distribute` 请求体 `{"memberNames": ["member-xxx"]}`，返回 `{generated, items[]}`；`distribute` 额外返回 `emailed` 与 `deliveryNote`（`emailed` 只表示已提交给通知中心，实际投递取决于站点邮件通知器）。
+- `DELETE .../{memberName}/claim` 清掉该成员的令牌注解，返回 `{success: true}`；成员不存在或无有效令牌时 `404`。
+
+> **为什么不放在 `api.plugin.halo.run`**：Halo 核心 `role-template-public-apis` 给该分组授的是通配 `resources: ["*"]` + `verbs: ["get","list"]`，插件规则拦不住该分组下任何 GET。0.0.7 及以前 `GET /plugins/PluginMembers/claims` 因此对匿名可见，能直接读走全部令牌与认领链接。匿名认领流程本身（`plugins/claim`、`plugins/claim/send-code`、`plugins/claim/{token}`）仍然留在 `api.plugin` 分组。
+
 ## 撤回审核 API
 
 后台处理成员的自助撤回申请，需要成员管理权限。
@@ -384,7 +404,21 @@ GET /apis/api.member.plugin.halo.run/v1alpha1/members/-/statistics/overall
 | `429` | `request-not-permitted` | 触发提交限流或验证码频率限制 |
 | `503` | `member-application-unavailable` | 验证码服务暂时不可用 |
 
-公开只读的 `members`（分页参数）参数错误返回 `{"message": "..."}` 形式的 `400`；申请、验证码和撤回等写操作均为 problem+json。
+0.0.8 起**全部接口**（公开只读、控制台、管理、MCP 之外的所有 HTTP 端点）都只输出这一种形态，不再有 `{"message": ...}` 之类的旧写法。四个标准字段之外，`code`、`errors`（字段级校验明细）、`traceId`、`timestamp` 作为扩展字段**平铺在顶层**，不是嵌套子对象：
+
+```json
+{
+  "type": "https://halo.run/probs/invalid-member-query",
+  "title": "成员查询参数无效",
+  "status": 400,
+  "detail": "page 必须是大于 0 的整数",
+  "code": "INVALID_ARGUMENT",
+  "traceId": "8f1c…",
+  "timestamp": "2026-11-06T01:20:31.482Z"
+}
+```
+
+前端取值请读 `detail`（旧主题脚本读的是 `message`，已在主题 0.0.13 同步改为 `detail || message`）。未捕获异常由 `GlobalExceptionHandler` 统一转换，`code` 按状态映射为 `INVALID_ARGUMENT` / `SECURITY_ERROR` / `NOT_FOUND` / `CONFLICT` / `RATE_LIMIT_EXCEEDED` / `INTERNAL_ERROR`。
 
 其他常见状态码：`401` 未认证、`403` 无权限、`404` 资源不存在、`409` 资源冲突、`500` 服务端异常。
 

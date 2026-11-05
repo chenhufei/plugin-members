@@ -27,6 +27,7 @@ import run.halo.members.exception.CaptchaRejectedException;
 import run.halo.members.exception.RateLimitExceededException;
 import run.halo.members.exception.DuplicateMemberException;
 import run.halo.members.exception.PendingCapacityExceededException;
+import run.halo.members.exception.ProblemResponses;
 import run.halo.members.finders.MemberFinder;
 import run.halo.members.security.RateLimitService;
 import run.halo.members.security.SecurityService;
@@ -173,9 +174,7 @@ public class MemberEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> problem(HttpStatus status, String type, String title,
         String detail) {
-        return ServerResponse.status(status)
-            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .bodyValue(new ProblemResponse(type, title, status.value(), detail));
+        return ProblemResponses.write(ProblemResponses.typeOf(status, type, title, detail));
     }
 
     /**
@@ -262,13 +261,6 @@ public class MemberEndpoint implements CustomEndpoint {
         
         String captchaCode
     ) {}
-
-    /**
-     * 错误响应
-     */
-    public record ErrorResponse(String message) {}
-
-    public record ProblemResponse(String type, String title, int status, String detail) {}
 
     /**
      * 图形验证码响应，图片以 data URL 返回，客户端只需回传 challengeId

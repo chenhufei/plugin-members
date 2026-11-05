@@ -113,13 +113,14 @@ git switch -c feat/members-batch-load
 
 控制台前端由 Gradle 关联任务自动构建并打进 jar（`buildFrontend` → `processResources` → `jar`），**不要**手工跑 `pnpm build` 再拷 `src/main/resources/console`——顺序错了会让 jar 里留着上一版控制台，表现为「代码改了、jar 也打了，线上还是旧界面」。
 
-**装到本地 Halo 验证时不能直接替换 jar**：把新 jar 丢进 `data/plugins/` 后 pf4j 不会加载（插件仿佛消失、端点 404）。必须走控制台接口：
+**装到本地 Halo 验证时不能直接替换 jar**：把新 jar 丢进 `data/plugins/` 后 pf4j 不会加载（插件仿佛消失、端点 404）。必须走控制台接口覆盖安装：
 
 ```bash
-POST /apis/api.console.halo.run/v1alpha1/plugins/PluginMembers/upgrade   # 先停用 → upgrade → 启用
+# 先停用，再带 jar 调 upgrade（接口内部完成停用 → 替换 → 启用）
+POST /apis/api.console.halo.run/v1alpha1/plugins/PluginMembers/upgrade   # multipart，字段 file=@build/libs/plugin-members-<ver>.jar
 ```
 
-`.local-halo/upgrade-members-003.mjs` 是现成脚本（复用 `halo-qa-clean.mjs` 的登录）。装完核对 `spec.version` 与 `status.phase=STARTED`。
+装完核对 `hostname/.plugin.halo.run/plugins/PluginMembers` 的 `spec.version` 是否为新版本、`status.phase` 是否为 `STARTED`。接口细节与认证方式见 Halo 官方《插件开发 · 本地调试》。
 
 
 ### 第 6 步：提交与 PR

@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.BodyInserters;
@@ -27,6 +28,7 @@ import reactor.core.scheduler.Schedulers;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.plugin.ApiVersion;
+import run.halo.members.exception.ProblemResponses;
 import run.halo.members.utils.AvatarProxyUrl;
 
 /**
@@ -85,8 +87,8 @@ public class AvatarProxyEndpoint implements CustomEndpoint {
     private Mono<ServerResponse> avatar(ServerRequest request) {
         URI target = AvatarProxyUrl.resolve(request.queryParam("url").orElse("")).orElse(null);
         if (target == null) {
-            return ServerResponse.badRequest()
-                .bodyValue(new ErrorResponse("头像地址不在允许范围内"));
+            return ProblemResponses.problem(HttpStatus.BAD_REQUEST, "invalid-avatar-request",
+                "头像地址无效", "头像地址不在允许范围内");
         }
         CachedAvatar cached = cache.get(target.toString());
         if (cached != null && cached.expiresAt() > System.currentTimeMillis()) {
@@ -97,8 +99,8 @@ public class AvatarProxyEndpoint implements CustomEndpoint {
             .flatMap(this::respond)
             .onErrorResume(error -> {
                 log.warn("代理头像失败：{} - {}", target, error.getMessage());
-                return ServerResponse.status(502)
-                    .bodyValue(new ErrorResponse("头像获取失败，请稍后重试"));
+                return ProblemResponses.problem(HttpStatus.BAD_GATEWAY, "avatar-unavailable",
+                    "头像获取失败", "头像获取失败，请稍后重试");
             });
     }
 
@@ -171,9 +173,5 @@ public class AvatarProxyEndpoint implements CustomEndpoint {
     }
 
     private record CachedAvatar(byte[] body, String contentType, long expiresAt) {
-    }
-
-    /** 与成员公开接口同一套错误体，方便前端统一处理。 */
-    public record ErrorResponse(String message) {
     }
 }

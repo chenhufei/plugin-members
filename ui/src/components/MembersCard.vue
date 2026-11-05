@@ -2,6 +2,7 @@
 import { membersBatchApiClient, membersCoreApiClient } from "@/api";
 import { invalidateMemberViews } from "@/api/query-keys";
 import { useMemberGroupFetch } from "@/composables/use-group-fetch";
+import { errorMessage } from "@/utils/error";
 import type { GroupWithMembers } from "@/utils/group-members";
 import type { Member, MemberGroup } from "@/types";
 import {
@@ -90,7 +91,7 @@ function handleDeleteInBatch() {
         enabledSelect.value = false;
         selectedMemberNames.value.length = 0;
       } catch (error: any) {
-        Toast.error(error.response?.data?.message || error.message || "删除失败");
+        Toast.error(errorMessage(error, "删除失败"));
       }
     },
   });
@@ -116,7 +117,7 @@ function handleMoveToGroup(targetGroup: MemberGroup) {
         enabledSelect.value = false;
         selectedMemberNames.value.length = 0;
       } catch (error: any) {
-        Toast.error(error.response?.data?.message || error.message || "移动失败");
+        Toast.error(errorMessage(error, "移动失败"));
       }
     },
   });
@@ -145,7 +146,7 @@ function handleDeleteGroup({ deleteMembers }: { deleteMembers: boolean }) {
         Toast.success("删除成功");
         void invalidateMemberViews(queryClient);
       } catch (error: any) {
-        Toast.error(error.response?.data?.message || error.message || "删除失败");
+        Toast.error(errorMessage(error, "删除失败"));
       }
     },
   });
