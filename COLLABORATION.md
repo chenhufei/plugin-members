@@ -93,15 +93,15 @@ tag 名直接用版本号，**不加 `v` 前缀**。`--follow-tags` 只推送 an
 
 | 平台 | 本仓库地址 | 用途 |
 |---|---|---|
-| **Gitee（主）** | `https://gitee.com/xiui-cc/plugin-members.git` | 日常协作，分支与 PR 都在这里 |
+| **Gitee（主）** | `https://gitee.com/nucma/plugin-members.git` | 日常协作，分支与 PR 都在这里 |
 | GitHub（镜像） | `https://github.com/chenhufei/plugin-members.git` | 只读分发，由 Gitee 镜像自动同步 |
 
 > **只在 Gitee 提 PR。** GitHub 端由 Gitee 的 Push 镜像强制覆盖，直接推到 GitHub 的提交会在下次同步时被冲掉。
 
 同级的另外两个仓库：
 
-- `https://gitee.com/xiui-cc/theme-nucma.git`
-- `https://gitee.com/xiui-cc/plugin-link-submit-next.git`
+- `https://gitee.com/nucma/theme-nucma.git`
+- `https://gitee.com/nucma/plugin-link-submit-next.git`
 
 ### 步骤
 
@@ -109,12 +109,12 @@ tag 名直接用版本号，**不加 `v` 前缀**。`--follow-tags` 只推送 an
 2. 把三个仓库 clone 到**同一父目录**（三者互不嵌套，但联调时需要并排放置）：
 
    ```bash
-   git clone https://gitee.com/xiui-cc/theme-nucma.git
-   git clone https://gitee.com/xiui-cc/plugin-members.git
-   git clone https://gitee.com/xiui-cc/plugin-link-submit-next.git
+   git clone https://gitee.com/nucma/theme-nucma.git
+   git clone https://gitee.com/nucma/plugin-members.git
+   git clone https://gitee.com/nucma/plugin-link-submit-next.git
    ```
 
-   Windows 下可用工作区脚本一次拉齐：`.\scripts\clone-all.ps1 -Owner xiui-cc`
+   Windows 下可用工作区脚本一次拉齐：`.\scripts\clone-all.ps1 -Owner nucma`
 
 3. 环境要求：主题需 Node.js ≥ 22.12；插件需 JDK 21（用仓库自带的 `./gradlew`，无需全局安装 Gradle）。
 4. 可选：挂一个 GitHub 远程，方便对照上游

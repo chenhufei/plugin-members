@@ -139,7 +139,7 @@ build/libs/plugin-members-<version>.jar
 ## 参与开发
 
 三仓（主题 + 本插件 + 友链插件）共用一套协同流程，**动手前先读**
-<https://gitee.com/xiui-cc/theme-nucma/blob/main/CONTRIBUTING.md>：
+<https://gitee.com/nucma/theme-nucma/blob/main/CONTRIBUTING.md>：
 
 - 改前先同步；协作者不推 `main`，一律开分支提 PR。
 - 只改源码，`console/**`、`static/**` 由 Gradle 任务生成。
@@ -155,8 +155,8 @@ build/libs/plugin-members-<version>.jar
 
 ## 反馈与许可
 
-- 仓库（主）：<https://gitee.com/xiui-cc/plugin-members>
+- 仓库（主）：<https://gitee.com/nucma/plugin-members>
 - 镜像：<https://github.com/chenhufei/plugin-members>
-- 问题反馈：<https://gitee.com/xiui-cc/plugin-members/issues>
+- 问题反馈：<https://gitee.com/nucma/plugin-members/issues>
 - API 文档：[docs/API.md](docs/API.md)
 - 许可证：GPL-3.0
