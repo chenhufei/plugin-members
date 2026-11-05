@@ -276,6 +276,8 @@ README / CHANGELOG / docs 是否需要同批更新（需要则已在本 PR 内�
    git commit -m "feat(members): 改动要点；x.y.z"
    git tag -a x.y.z -m "x.y.z"
    git push gitee main --follow-tags
+   # 若被分支保护拒绝（protected branch）：不得解除保护，
+   # 改推 git push gitee main:xiui → 在 Gitee 开 PR xiui → main → 合并后 git fetch
    ```
 
 6. Gitee 建发行版，挂原始 jar，发布说明按「级别 + 影响面 + 验证结果 + 未验证项」写。
