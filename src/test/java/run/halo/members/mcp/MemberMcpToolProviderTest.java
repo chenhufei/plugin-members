@@ -93,10 +93,23 @@ class MemberMcpToolProviderTest {
     private final ObjectProvider<SchoolAffinityService> affinityServiceProvider =
         mock(ObjectProvider.class);
 
-    private final MemberMcpToolProvider provider = new MemberMcpToolProvider(roleService, client,
-        memberFinder, memberQueryService, memberBatchService, statisticsService,
-        withdrawReviewService, claimTokenService, externalLinkProcessor, settingConfigMember,
-        affinityServiceProvider);
+    // 工具按域拆成 5 个 provider，测试对「合并后的工具清单」做断言，与运行期一致
+    private final MemberMcpQueryProvider queryProvider = new MemberMcpQueryProvider(roleService,
+        client, memberFinder, memberQueryService, memberBatchService, statisticsService);
+    private final MemberMcpGroupProvider groupProvider = new MemberMcpGroupProvider(roleService,
+        client, memberFinder, memberQueryService, memberBatchService);
+    private final MemberMcpReviewProvider reviewProvider = new MemberMcpReviewProvider(roleService,
+        client, memberFinder, memberBatchService, withdrawReviewService, memberQueryService);
+    private final MemberMcpClaimProvider claimProvider = new MemberMcpClaimProvider(roleService,
+        client, memberFinder, memberQueryService, claimTokenService, externalLinkProcessor);
+    private final MemberMcpStatisticsProvider statisticsProvider =
+        new MemberMcpStatisticsProvider(roleService, client, memberFinder, statisticsService,
+            settingConfigMember, affinityServiceProvider);
+
+    private Flux<McpToolDefinition> definitions() {
+        return Flux.merge(queryProvider.tools(), groupProvider.tools(), reviewProvider.tools(),
+            claimProvider.tools(), statisticsProvider.tools());
+    }
 
     @BeforeEach
     void mimicExternalUrl() {
@@ -126,8 +139,8 @@ class MemberMcpToolProviderTest {
 
     private static Set<String> expandDependencies(Collection<String> granted) {
         Set<String> effective = new HashSet<>(granted);
-        if (granted.contains(MemberMcpToolProvider.MANAGE_ROLE)) {
-            effective.add(MemberMcpToolProvider.VIEW_ROLE);
+        if (granted.contains(AbstractMemberMcpToolProvider.MANAGE_ROLE)) {
+            effective.add(AbstractMemberMcpToolProvider.VIEW_ROLE);
         }
         return effective;
     }
@@ -135,7 +148,7 @@ class MemberMcpToolProviderTest {
     @Test
     @DisplayName("工具名与输入 Schema 符合 MCP Server 约束")
     void toolsUseConstrainedNamesAndObjectSchemas() {
-        var tools = provider.tools().collectList().block();
+        var tools = definitions().collectList().block();
         assertThat(tools).isNotNull();
 
         assertThat(tools).map(McpToolDefinition::name)
@@ -168,7 +181,7 @@ class MemberMcpToolProviderTest {
     @Test
     @DisplayName("委托管理员可查看但不能审核")
     void delegatedAdminGetsViewOnly() {
-        grantRoles("guest", MemberMcpToolProvider.VIEW_ROLE);
+        grantRoles("guest", AbstractMemberMcpToolProvider.VIEW_ROLE);
 
         assertThat(allowed("list_members")).isTrue();
         assertThat(allowed("review_member_submissions")).isFalse();
@@ -180,7 +193,7 @@ class MemberMcpToolProviderTest {
     @Test
     @DisplayName("拥有管理角色模板即可审核成员申请")
     void memberManagerCanReview() {
-        grantRoles(MemberMcpToolProvider.MANAGE_ROLE);
+        grantRoles(AbstractMemberMcpToolProvider.MANAGE_ROLE);
 
         assertThat(allowed("list_members")).isTrue();
         assertThat(allowed("review_member_submissions")).isTrue();
@@ -1104,7 +1117,7 @@ class MemberMcpToolProviderTest {
     }
 
     private McpToolDefinition tool(String name) {
-        return provider.tools()
+        return definitions()
             .filter(definition -> name.equals(definition.name()))
             .next()
             .blockOptional()

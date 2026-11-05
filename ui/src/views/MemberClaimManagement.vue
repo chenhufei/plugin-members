@@ -15,7 +15,9 @@ import { axiosInstance } from "@halo-dev/api-client";
 import { errorMessage } from "@/utils/error";
 import { formatDatetime } from "@/utils/date";
 
-const CLAIM_API_BASE = "/apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers";
+// 认领管理是站内接口（api.member 分组需要登录 + 成员管理权限）；
+// 匿名认领流程仍在 api.plugin 分组的 /plugins/PluginMembers/claim*。
+const CLAIM_API_BASE = "/apis/api.member.plugin.halo.run/v1alpha1";
 
 interface ClaimToken {
   memberName: string;
@@ -47,7 +49,7 @@ const selectedClaims = ref<string[]>([]);
 const { data: incompleteData, isLoading: incompleteLoading, refetch: refetchIncomplete } = useQuery<IncompleteMember[]>({
   queryKey: ["plugin:members:incomplete"],
   queryFn: async () => {
-    const { data } = await axiosInstance.get(`${CLAIM_API_BASE}/incomplete-members`);
+    const { data } = await axiosInstance.get(`${CLAIM_API_BASE}/members/-/incomplete`);
     return data.items || [];
   },
 });
@@ -57,7 +59,7 @@ const incompleteMembers = computed(() => incompleteData.value || []);
 const { data: claimsData, isLoading: claimsLoading, refetch: refetchClaims } = useQuery<ClaimToken[]>({
   queryKey: ["plugin:members:claims"],
   queryFn: async () => {
-    const { data } = await axiosInstance.get(`${CLAIM_API_BASE}/claims`);
+    const { data } = await axiosInstance.get(`${CLAIM_API_BASE}/members/-/claims`);
     return data.items || [];
   },
   refetchInterval: 5000,
@@ -67,7 +69,7 @@ const claims = computed(() => claimsData.value || []);
 
 const generateMutation = useMutation({
   mutationFn: async (memberNames: string[]) => {
-    const { data } = await axiosInstance.post(`${CLAIM_API_BASE}/claims/generate`, { memberNames });
+    const { data } = await axiosInstance.post(`${CLAIM_API_BASE}/members/-/claims-generate`, { memberNames });
     return data;
   },
   onSuccess: (data) => {
@@ -83,13 +85,13 @@ const generateMutation = useMutation({
     selectedIncomplete.value = [];
   },
   onError: (error: any) => {
-    Toast.error(error.response?.data?.message || error.message || "生成失败");
+    Toast.error(errorMessage(error, "生成失败"));
   },
 });
 
 const invalidateMutation = useMutation({
   mutationFn: async (memberName: string) => {
-    await axiosInstance.delete(`${CLAIM_API_BASE}/claims/${memberName}`);
+    await axiosInstance.delete(`${CLAIM_API_BASE}/members/${memberName}/claim`);
   },
   onSuccess: () => {
     Toast.success("认领链接已作废");
@@ -97,7 +99,7 @@ const invalidateMutation = useMutation({
     queryClient.invalidateQueries({ queryKey: ["plugin:members:incomplete"] });
   },
   onError: (error: any) => {
-    Toast.error(error.response?.data?.message || error.message || "作废失败");
+    Toast.error(errorMessage(error, "作废失败"));
   },
 });
 
@@ -108,7 +110,7 @@ const invalidateMutation = useMutation({
 const batchInvalidateMutation = useMutation({
   mutationFn: async (memberNames: string[]) => {
     const results = await Promise.allSettled(
-      memberNames.map((memberName) => axiosInstance.delete(`${CLAIM_API_BASE}/claims/${memberName}`))
+      memberNames.map((memberName) => axiosInstance.delete(`${CLAIM_API_BASE}/members/${memberName}/claim`))
     );
     return {
       total: results.length,
@@ -132,7 +134,7 @@ const batchInvalidateMutation = useMutation({
 
 const distributeMutation = useMutation({
   mutationFn: async (memberNames: string[]) => {
-    const { data } = await axiosInstance.post(`${CLAIM_API_BASE}/claims/distribute`, { memberNames });
+    const { data } = await axiosInstance.post(`${CLAIM_API_BASE}/members/-/claims-distribute`, { memberNames });
     return data;
   },
   onSuccess: (data) => {
@@ -152,7 +154,7 @@ const distributeMutation = useMutation({
     selectedIncomplete.value = [];
   },
   onError: (error: any) => {
-    Toast.error(error.response?.data?.message || error.message || "分发失败");
+    Toast.error(errorMessage(error, "分发失败"));
   },
 });
 

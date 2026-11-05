@@ -39,6 +39,13 @@ public class ClaimTokenService {
     /**
      * 为成员生成认领 token
      *
+     * <p>令牌以明文存进成员注解 {@code member.plugin.halo.run/claim-token}，是有意为之：
+     * 管理端的「认领链接」列表要能把链接整条复制出来重新分发，存散列就变成"只在生成时显示一次"，
+     * 与现有运营流程冲突。可控之处在别处——令牌 256 位随机（{@link SecureRandom}）、
+     * 默认 7 天过期、可按成员作废，且读取它的接口已全部收进需要登录 + RBAC 的
+     * {@code api.member.plugin.halo.run}；公开端点 {@code MemberPublicEndpoint} 只回传
+     * name/creationTimestamp 的裁剪 metadata，不回注解，所以令牌不会随成员列表外泄。
+     *
      * @param memberName 成员名称（metadata.name）
      * @param expiresAt 过期时间（可选，默认 7 天后）
      * @return 生成的 token 字符串

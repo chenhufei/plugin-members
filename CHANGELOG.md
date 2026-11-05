@@ -4,6 +4,26 @@
 
 ---
 
+## [0.0.8] - 2026-11-06
+
+*影响面：认领链接管理接口与权限、全部错误响应体、MCP 工具实现（工具清单不变）。*
+
+### 安全
+
+- **认领令牌可被未登录访客整表拉走**：「列出认领令牌」「信息不完整的成员」两条 GET 端点原先与匿名认领流程一起放在 `api.plugin.halo.run` 分组。Halo 核心的 `role-template-public-apis` 对该分组授的是通配 `resources: ["*"]` + `verbs: ["get", "list"]`——也就是**插件自己写什么规则都拦不住这个分组下的任何 GET**。结果是任何访客访问 `GET /apis/api.plugin.halo.run/v1alpha1/plugins/PluginMembers/claims` 都能拿到全部成员的认领令牌和现成的认领链接（令牌等于成员身份凭证），而同一组路由的生成/作废反倒会被 RBAC 拦住，形成"看得见、改不了"的假象，很容易测不出问题。现在把这 5 条管理路由整体搬到 `api.member.plugin.halo.run`：该分组没有核心通配规则，匿名访问直接被拦成登录跳转，登录用户还要过角色模板里 `members/claim*` 的规则。认证后的管理端调用路径同步改为 `/apis/api.member.plugin.halo.run/v1alpha1/members/-/claims`（列表）、`.../members/-/incomplete`、`.../members/-/claims-generate`、`.../members/-/claims-distribute`、`DELETE .../members/{name}/claim`。
+
+### 变更
+
+- **错误响应统一为一种形态**：此前同一个插件里有 5 套写法（problem+json、跨类复用的内嵌 record、两份各自的 `ErrorResponse{message}`、`{success:false,message}`、以及 `{code,message,details,timestamp}`），前端只能按端点猜字段。现在统一为 RFC 7807：`type` / `title` / `status` / `detail` 四个标准字段，`code` / `errors` / `traceId` / `timestamp` 作为扩展字段**平铺在顶层**（不嵌套子对象）。**升级提示**：如果主题或第三方脚本读过旧的 `message` 字段，要改读 `detail`（本仓主题侧已同步，见主题 0.0.13）。
+- **MCP 工具实现按域拆成 5 个 provider**：原来 2,664 行的单文件拆为成员查询 / 分组 / 审核 / 认领 / 统计五个类，加共用基类与 `MemberMcpAudit`（统计与巡检共用同一套判定，避免两边口径漂移）。`mcp-tool-provider` 扩展点是多实例扩展，拆分后**工具名、参数与返回结构完全不变**。
+
+### 说明
+
+- 认领令牌仍以明文存进成员注解。这是有意保留的：管理端要能把链接整条复制出来重新分发，存散列就变成"只在生成时显示一次"，与现有运营流程冲突。可控之处在别处——令牌 256 位随机、默认 7 天过期、可按成员作废，读取它的接口已全部收进需要登录的 `api.member` 分组，公开端点只回裁剪过的 metadata、不回注解。理由与边界写进了 `ClaimTokenService` 的注释。
+- `CONTRIBUTING.md` 里指向工作区外脚本的路径改成了 Halo 官方《插件开发 · 本地调试》，单独 clone 仓库也能照做。
+
+---
+
 ## [0.0.6] - 2026-11-03
 
 ### 修复

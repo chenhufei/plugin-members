@@ -72,20 +72,22 @@ rules:
     resources: [ "members/withdraw-approve", "members/withdraw-reject" ]
     resourceNames: [ "-" ]
     verbs: [ "create" ]
-  # 认领链接管理
-  - apiGroups: [ "api.plugin.halo.run" ]
-    resources: [ "plugins/claims" ]
-    resourceNames: [ "PluginMembers" ]
-    verbs: [ "get", "list", "delete" ]
-  - apiGroups: [ "api.plugin.halo.run" ]
-    resources: [ "plugins/claims", "plugins/claims/generate", "plugins/claims/distribute" ]
-    resourceNames: [ "PluginMembers" ]
+  # 认领管理已搬离 api.plugin.halo.run——Halo 核心 role-template-public-apis 给该分组授的是通配
+  # resources:["*"] + get/list，插件规则拦不住任何 GET。改在 api.member.plugin.halo.run 下按子资源授权：
+  # Halo 把 /members/-/claims 解析成 resource=members、subresource=claims、name="-"，
+  # 规则里的 resources 要写成 "members/claims"，第 4 段（如 claims-generate）只是 subName，不参与匹配。
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "members/claims", "members/incomplete" ]
+    resourceNames: [ "-" ]
+    verbs: [ "get" ]
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "members/claims-generate", "members/claims-distribute" ]
+    resourceNames: [ "-" ]
     verbs: [ "create" ]
-  # 信息不完善成员列表
-  - apiGroups: [ "api.plugin.halo.run" ]
-    resources: [ "plugins/incomplete-members" ]
-    resourceNames: [ "PluginMembers" ]
-    verbs: [ "get", "list" ]
+  # 作废认领令牌作用在具体成员名上（/members/{name}/claim），不能限定 resourceNames。
+  - apiGroups: [ "api.member.plugin.halo.run" ]
+    resources: [ "members/claim" ]
+    verbs: [ "delete" ]
 
 ---
 
@@ -126,8 +128,16 @@ rules:
     resources: [ "plugins/membersubmits" ]
     resourceNames: [ "PluginMembers" ]
     verbs: [ "create" ]
-  # 自助认领：发送验证码 + 提交认领
+  # 自助认领：发送验证码 + 提交认领（/plugins/PluginMembers/claim/{token} 也落在 "plugins/claim" 上）
   - apiGroups: [ "api.plugin.halo.run" ]
-    resources: [ "plugins/claim/send-code", "plugins/claim" ]
+    resources: [ "plugins/claim" ]
     resourceNames: [ "PluginMembers" ]
     verbs: [ "create" ]
+  # 认领页要读回令牌对应的成员信息与验证方式。
+  # 注：这一条其实是冗余的——Halo 核心 role-template-public-apis 已给
+  # api.plugin.halo.run 授了 resources:["*"] + get/list，匿名读该分组本来就是通的。
+  # 显式留下这条是为了核心哪天收窄通配时认领页不至于突然 403。
+  - apiGroups: [ "api.plugin.halo.run" ]
+    resources: [ "plugins/claim" ]
+    resourceNames: [ "PluginMembers" ]
+    verbs: [ "get" ]

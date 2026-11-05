@@ -3,13 +3,10 @@ package run.halo.members.endpoint;
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
@@ -18,7 +15,6 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
@@ -32,9 +28,9 @@ import run.halo.app.notification.NotificationReasonEmitter;
 import run.halo.app.notification.UserIdentity;
 import run.halo.app.plugin.ApiVersion;
 import run.halo.members.Member;
-import run.halo.members.MemberGroup;
 import run.halo.members.NotificationReasonPublisher;
 import run.halo.members.cache.VerificationCodeService;
+import run.halo.members.exception.ProblemResponses;
 import run.halo.members.security.RateLimitService;
 import run.halo.members.security.captcha.MemberCaptchaService;
 import run.halo.members.service.ClaimTokenService;
@@ -106,27 +102,6 @@ public class MemberClaimEndpoint implements CustomEndpoint {
             .POST("/plugins/PluginMembers/claim/{token}", this::claimByToken,
                 builder -> builder.operationId("ClaimByToken")
                     .description("Submit qqFriendLink with claim token")
-                    .tag(tag))
-            // Admin endpoints
-            .GET("/plugins/PluginMembers/incomplete-members", this::listIncompleteMembers,
-                builder -> builder.operationId("ListIncompleteMembers")
-                    .description("List members with incomplete qqFriendLink (admin)")
-                    .tag(tag))
-            .GET("/plugins/PluginMembers/claims", this::listClaims,
-                builder -> builder.operationId("ListClaims")
-                    .description("List all active claim tokens (admin)")
-                    .tag(tag))
-            .POST("/plugins/PluginMembers/claims/generate", this::generateClaims,
-                builder -> builder.operationId("GenerateClaims")
-                    .description("Generate claim tokens for members (admin)")
-                    .tag(tag))
-            .DELETE("/plugins/PluginMembers/claims/{memberName}", this::invalidateClaim,
-                builder -> builder.operationId("InvalidateClaim")
-                    .description("Invalidate a claim token (admin)")
-                    .tag(tag))
-            .POST("/plugins/PluginMembers/claims/distribute", this::distributeClaims,
-                builder -> builder.operationId("DistributeClaims")
-                    .description("Generate and email claim links to members (admin)")
                     .tag(tag))
             .build();
     }
@@ -579,216 +554,49 @@ public class MemberClaimEndpoint implements CustomEndpoint {
         return value.replace("'", "''");
     }
 
-    private Mono<ServerResponse> listIncompleteMembers(ServerRequest request) {
-        return client.list(Member.class, member -> {
-                var spec = member.getSpec();
-                return spec.getQqFriendLink() == null || spec.getQqFriendLink().isBlank();
-            }, null)
-            .collectList()
-            .flatMap(members -> resolveGroupLabels(members).map(groupLabels -> members.stream()
-                .map(member -> {
-                    var spec = member.getSpec();
-                    String qq = spec.getQq() != null ? spec.getQq() : "";
-                    String target = EmailUtils.resolveEmail(spec.getEmail(), qq);
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("memberName", member.getMetadata().getName());
-                    item.put("displayName", spec.getDisplayName() != null ? spec.getDisplayName() : "");
-                    item.put("qq", qq);
-                    item.put("school", spec.getSchool() != null ? spec.getSchool() : "");
-                    item.put("hasEmail", StringUtils.isNotBlank(spec.getEmail()));
-                    item.put("emailSource", StringUtils.isNotBlank(spec.getEmail())
-                        ? "MEMBER" : (target.isEmpty() ? "NONE" : "QQ"));
-                    item.put("targetEmail", EmailUtils.mask(target));
-                    putGroup(item, spec, groupLabels);
-                    return item;
-                })
-                .toList()
-            ))
-            .flatMap(items -> ServerResponse.ok().bodyValue(Map.of("items", items)));
-    }
-
-    private Mono<ServerResponse> listClaims(ServerRequest request) {
-        return client.list(Member.class, member -> {
-                var annotations = member.getMetadata().getAnnotations();
-                return annotations != null
-                    && annotations.containsKey("member.plugin.halo.run/claim-token");
-            }, null)
-            .collectList()
-            .flatMap(members -> resolveGroupLabels(members).map(groupLabels -> members.stream()
-                .map(member -> {
-                    var annotations = member.getMetadata().getAnnotations();
-                    String token = annotations.get("member.plugin.halo.run/claim-token");
-                    String expiresStr = annotations.get("member.plugin.halo.run/claim-token-expires");
-                    Instant expires = null;
-                    if (expiresStr != null) {
-                        try {
-                            expires = Instant.parse(expiresStr);
-                        } catch (Exception ignored) {}
-                    }
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("memberName", member.getMetadata().getName());
-                    item.put("displayName", member.getSpec().getDisplayName());
-                    item.put("qq", member.getSpec().getQq());
-                    item.put("token", token);
-                    item.put("claimUrl", buildClaimUrl(token));
-                    item.put("expiresAt", expires != null ? expires.toString() : null);
-                    item.put("expired", expires != null && Instant.now().isAfter(expires));
-                    putGroup(item, member.getSpec(), groupLabels);
-                    return item;
-                })
-                .toList()
-            ))
-            .flatMap(items -> ServerResponse.ok().bodyValue(Map.of("items", items)));
-    }
-
-    /**
-     * 一次性解析这批成员所属分组的展示名，避免在成员循环里逐个查分组造成 N+1。
-     */
-    private Mono<Map<String, String>> resolveGroupLabels(List<Member> members) {
-        List<String> groupNames = members.stream()
-            .map(member -> member.getSpec() == null ? null : member.getSpec().getGroupName())
-            .filter(StringUtils::isNotBlank)
-            .distinct()
-            .toList();
-        if (groupNames.isEmpty()) {
-            return Mono.just(Map.of());
-        }
-        return client.list(MemberGroup.class,
-                group -> groupNames.contains(group.getMetadata().getName()), null)
-            .collectMap(group -> group.getMetadata().getName(),
-                group -> group.getSpec() == null || StringUtils.isBlank(group.getSpec().getDisplayName())
-                    ? "" : group.getSpec().getDisplayName())
-            .defaultIfEmpty(Map.of());
-    }
-
-    /**
-     * 分组展示名优先取分组的 displayName，缺失时回退到分组标识，两者都没有则视为未分组。
-     */
-    private void putGroup(Map<String, Object> item, Member.MemberSpec spec,
-        Map<String, String> groupLabels) {
-        if (spec == null) {
-            item.put("groupName", "");
-            item.put("groupDisplayName", "");
-            return;
-        }
-        String groupName = StringUtils.isNotBlank(spec.getGroupName()) ? spec.getGroupName() : "";
-        String displayName = groupName.isEmpty() ? "" : groupLabels.get(groupName);
-        item.put("groupName", groupName);
-        item.put("groupDisplayName", StringUtils.isNotBlank(displayName) ? displayName : "");
-    }
-
-    private Mono<ServerResponse> generateClaims(ServerRequest request) {
-        return request.bodyToMono(GenerateClaimsRequest.class)
-            .flatMap(body -> {
-                if (body.memberNames() == null || body.memberNames().isEmpty()) {
-                    return errorResponse(400, "成员名称列表不能为空");
-                }
-                return Flux.fromIterable(body.memberNames())
-                    .concatMap(name -> claimTokenService.generateToken(name, null)
-                        .map(token -> {
-                            Map<String, Object> item = new LinkedHashMap<>();
-                            item.put("memberName", name);
-                            item.put("token", token);
-                            item.put("claimUrl", buildClaimUrl(token));
-                            return item;
-                        })
-                        .onErrorResume(e -> Mono.just(Map.of(
-                            "memberName", name,
-                            "error", e.getMessage() != null ? e.getMessage() : "生成失败"
-                        ))))
-                    .collectList()
-                    .flatMap(items -> ServerResponse.ok().bodyValue(Map.of(
-                        "generated", items.stream().filter(i -> !i.containsKey("error")).count(),
-                        "items", items
-                    )));
-            });
-    }
-
-    private Mono<ServerResponse> invalidateClaim(ServerRequest request) {
-        String memberName = request.pathVariable("memberName");
-        return claimTokenService.invalidateToken(memberName)
-            .flatMap(member -> ServerResponse.ok().bodyValue(Map.of(
-                "success", true,
-                "message", "认领链接已作废"
-            )))
-            .switchIfEmpty(errorResponse(404, "成员不存在或无有效认领链接"));
-    }
-
-    private Mono<ServerResponse> distributeClaims(ServerRequest request) {
-        return request.bodyToMono(DistributeClaimsRequest.class)
-            .flatMap(body -> {
-                if (body.memberNames() == null || body.memberNames().isEmpty()) {
-                    return errorResponse(400, "成员名称列表不能为空");
-                }
-                // 分发即发信：站点邮件没配好就先说清楚，别生成一堆 token 却谁都收不到
-                return mailDeliveryGuard.unavailabilityReason()
-                    .flatMap(reason -> reason.isPresent()
-                        ? errorResponse(409, reason.get())
-                        : distributeTo(body.memberNames()));
-            });
-    }
-
-    private Mono<ServerResponse> distributeTo(List<String> memberNames) {
-        return Flux.fromIterable(memberNames)
-            .concatMap(name -> claimTokenService.generateToken(name, null)
-                .flatMap(token -> {
-                    String claimUrl = buildClaimUrl(token);
-                    return client.fetch(Member.class, name)
-                        .flatMap(member -> notificationReasonPublisher
-                            .publishClaimLinkNotice(member, claimUrl)
-                            .thenReturn(claimItem(name, token, claimUrl, true, null))
-                            .onErrorResume(error -> {
-                                log.warn("分发认领链接邮件失败: {}", name, error);
-                                return Mono.just(claimItem(name, token, claimUrl, false,
-                                    describeSendFailure(error)));
-                            }))
-                        .switchIfEmpty(Mono.just(claimItem(name, token, claimUrl, false,
-                            "成员不存在")));
-                })
-                .onErrorResume(error -> Mono.just(claimItem(name, null, null, false,
-                    StringUtils.defaultIfBlank(error.getMessage(), "生成失败")))))
-            .collectList()
-            .flatMap(items -> ServerResponse.ok().bodyValue(Map.of(
-                "generated", items.stream()
-                    .filter(i -> StringUtils.isNotBlank((String) i.get("token"))).count(),
-                "emailed", items.stream()
-                    .filter(i -> Boolean.TRUE.equals(i.get("emailed"))).count(),
-                "deliveryNote", "emailed 表示通知已提交给 Halo 通知中心，"
-                    + "实际投递取决于站点邮件通知器与 SMTP 配置。",
-                "items", items
-            )));
-    }
-
-    private Map<String, Object> claimItem(String memberName, String token, String claimUrl,
-        boolean emailed, String error) {
-        Map<String, Object> item = new LinkedHashMap<>();
-        item.put("memberName", memberName);
-        item.put("token", token == null ? "" : token);
-        item.put("claimUrl", claimUrl == null ? "" : claimUrl);
-        item.put("emailed", emailed);
-        if (error != null) {
-            item.put("error", error);
-        }
-        return item;
-    }
-
-    private String describeSendFailure(Throwable error) {
-        if (error instanceof NotificationReasonPublisher.NoMemberEmailException) {
-            return "成员未登记邮箱，无法发送认领链接邮件";
-        }
-        return "邮件通知提交失败：" + StringUtils.defaultIfBlank(error.getMessage(),
-            error.getClass().getSimpleName());
-    }
-
     private String buildClaimUrl(String token) {
         return externalLinkProcessor.processLink("/claim?token=" + token);
     }
 
+    /**
+     * 认领类错误的统一出口：状态码决定 problem type 与标题，message 作为 detail。
+     *
+     * <p>曾经这里回的是 {@code {success:false, message:…}}，与成员提交接口的
+     * problem+json 不是一套形态。现在按状态归类，前端只读 {@code detail} 即可。
+     */
     private Mono<ServerResponse> errorResponse(int status, String message) {
-        return ServerResponse.status(status).bodyValue(Map.of(
-            "success", false,
-            "message", message
-        ));
+        HttpStatus httpStatus = HttpStatus.resolve(status);
+        if (httpStatus == null) {
+            httpStatus = HttpStatus.BAD_REQUEST;
+        }
+        return ProblemResponses.problem(httpStatus, claimProblemSlug(httpStatus),
+            claimProblemTitle(httpStatus), message);
+    }
+
+    private static String claimProblemSlug(HttpStatus status) {
+        return switch (status) {
+            case BAD_REQUEST -> "invalid-claim-request";
+            case UNAUTHORIZED, FORBIDDEN -> "claim-forbidden";
+            case NOT_FOUND -> "claim-target-not-found";
+            case CONFLICT -> "claim-conflict";
+            case TOO_MANY_REQUESTS -> "request-not-permitted";
+            case BAD_GATEWAY -> "claim-notification-unavailable";
+            case SERVICE_UNAVAILABLE -> "claim-service-unavailable";
+            default -> "claim-request-failed";
+        };
+    }
+
+    private static String claimProblemTitle(HttpStatus status) {
+        return switch (status) {
+            case BAD_REQUEST -> "认领请求内容无效";
+            case UNAUTHORIZED, FORBIDDEN -> "认领请求被拒绝";
+            case NOT_FOUND -> "认领目标不存在";
+            case CONFLICT -> "认领冲突";
+            case TOO_MANY_REQUESTS -> "请求过于频繁";
+            case BAD_GATEWAY -> "通知服务不可用";
+            case SERVICE_UNAVAILABLE -> "服务暂时不可用";
+            default -> "认领处理失败";
+        };
     }
 
     public record SendClaimCodeRequest(
@@ -815,11 +623,4 @@ public class MemberClaimEndpoint implements CustomEndpoint {
         String avatar
     ) {}
 
-    public record GenerateClaimsRequest(
-        List<String> memberNames
-    ) {}
-
-    public record DistributeClaimsRequest(
-        List<String> memberNames
-    ) {}
 }

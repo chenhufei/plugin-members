@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'run.halo.members'
-version '0.0.7'
+version '0.0.8'
 
 repositories {
     maven { url 'https://maven.aliyun.com/repository/public' }
@@ -154,6 +154,10 @@ tasks.register('verifySecurityContracts') {
          'resources: [ "members/statistics" ]',
          'resources: [ "members/withdraw-requests" ]',
          'resources: [ "members/withdraw-approve", "members/withdraw-reject" ]',
+         // 认领管理必须留在需要登录的 api.member 分组，并逐条按子资源授权。
+         'resources: [ "members/claims", "members/incomplete" ]',
+         'resources: [ "members/claims-generate", "members/claims-distribute" ]',
+         'resources: [ "members/claim" ]',
          '- "members/batch-approve"', '- "members/export-csv"']
             .each { marker ->
                 if (!roleTemplate.contains(marker)) {
@@ -162,7 +166,10 @@ tasks.register('verifySecurityContracts') {
             }
         // Halo 把 CustomEndpoint 的 /-/xxx 解析为子资源且 POST 映射为 create，
         // nonResourceURLs 与 "post" 动词永远不会命中，禁止再写回这种规则。
-        ['- nonResourceURLs:', 'verbs: [ "get", "post" ]'].each { marker ->
+        ['- nonResourceURLs:', 'verbs: [ "get", "post" ]',
+         // 核心 role-template-public-apis 给 apiGroups api.plugin.halo.run 授了 resources:["*"] + get/list，
+         // 该分组下的 GET 一律匿名可读，认领令牌列表放回去就等于公开成员身份凭证。
+         'resources: [ "plugins/claims" ]'].each { marker ->
             if (roleTemplate.contains(marker)) {
                 throw new GradleException("Role template uses an authorization rule Halo never matches: ${marker}")
             }

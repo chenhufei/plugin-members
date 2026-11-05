@@ -3,6 +3,8 @@ package run.halo.members.endpoint;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import run.halo.members.exception.ProblemResponses;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -56,10 +58,25 @@ class MemberEndpointTest {
     }
 
     @Test
-    @DisplayName("错误响应记录会暴露消息")
-    void testErrorResponseRecords() {
-        assertEquals("提交失败", new MemberEndpoint.ErrorResponse("提交失败").message());
-        assertEquals("公开查询失败", new MemberPublicEndpoint.ErrorResponse("公开查询失败").message());
+    @DisplayName("错误响应统一为 RFC 7807：type/title/status/detail + 平铺扩展字段")
+    void testProblemResponseShape() throws Exception {
+        var problem = ProblemResponses.of(org.springframework.http.HttpStatus.CONFLICT,
+                "duplicate-member-application", "成员申请重复", "该 QQ 号已登记")
+            .withExtension("code", "CONFLICT");
+
+        assertEquals("https://halo.run/probs/duplicate-member-application",
+            problem.getType());
+        assertEquals("成员申请重复", problem.getTitle());
+        assertEquals(409, problem.getStatus());
+        assertEquals("该 QQ 号已登记", problem.getDetail());
+
+        var json = new com.fasterxml.jackson.databind.ObjectMapper()
+            .writeValueAsString(problem);
+        org.junit.jupiter.api.Assertions.assertTrue(json.contains("\"type\":\"https://halo.run/probs/duplicate-member-application\""), json);
+        org.junit.jupiter.api.Assertions.assertTrue(json.contains("\"status\":409"), json);
+        // 扩展字段必须平铺在顶层，不能落进嵌套对象里
+        org.junit.jupiter.api.Assertions.assertTrue(json.contains("\"code\":\"CONFLICT\""), json);
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains("\"extensions\""), json);
     }
 
     @Test

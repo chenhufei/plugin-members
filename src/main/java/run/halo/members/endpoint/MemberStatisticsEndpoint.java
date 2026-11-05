@@ -2,7 +2,6 @@ package run.halo.members.endpoint;
 
 import static org.springdoc.webflux.core.fn.SpringdocRouteBuilder.route;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -13,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
+import run.halo.members.exception.ProblemResponses;
 import run.halo.members.service.MemberStatisticsService;
 
 /**
@@ -135,10 +135,7 @@ public class MemberStatisticsEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> invalidDays(String detail) {
-        return ServerResponse.badRequest()
-            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .bodyValue(new MemberEndpoint.ProblemResponse(
-                "https://halo.run/probs/invalid-member-statistics-query",
-                "统计查询参数无效", HttpStatus.BAD_REQUEST.value(), detail));
+        return ProblemResponses.problem(HttpStatus.BAD_REQUEST,
+            "invalid-member-statistics-query", "统计查询参数无效", detail);
     }
 }
